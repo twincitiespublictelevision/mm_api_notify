@@ -28,13 +28,27 @@ pub fn ingest() -> Vec<JoinHandle<()>> {
 ///
 /// Recovers on termination
 ///
-pub fn terminate() {
-    println!("Waiting for all threads to finish");
+pub fn terminate(join_handles: Vec<JoinHandle<()>>) {
+    println!("Terminating...");
+    join_handles.into_iter().map(|join_handle| {
+
+        match join_handle.thread().name() {
+            Some(name) => println!("Joining thread: {}", name),
+            None => {}
+        }
+
+        join_handle.join();
+    });
 }
 
 ///
 /// Gets all programs from COVE
 ///
 pub fn get_videos<'a>(show: wp::WPShow) -> Vec<Video<'a>> {
-    return vec![];
+    println!("Getting videos for show: {}", show.id);
+    return vec![
+        Video {tp_media_id: "1"},
+        Video {tp_media_id: "2"},
+        Video {tp_media_id: "3"},
+    ];
 }

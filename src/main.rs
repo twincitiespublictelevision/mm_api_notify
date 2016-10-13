@@ -5,6 +5,7 @@ extern crate chan_signal;
 extern crate video_ingest;
 
 use chan_signal::Signal;
+use video_ingest::WorkerPool;
 
 ///
 /// Starts processing
@@ -15,18 +16,21 @@ fn main() {
     let signal = chan_signal::notify(&[Signal::INT, Signal::TERM]);
     
     // When our work is complete, send a sentinel value on `sdone`.
-    let (sdone, rdone) = chan::sync(0);
-    
-    // Run work.
-    ::std::thread::spawn(move || run(sdone));
+    let (send, recv) = chan::sync(0);
 
+    // Start the workers
+    let mut worker_pool = WorkerPool { join_handles: vec![] };
+
+    // Run work.
+    worker_pool = run(send, worker_pool);
+    
     // Wait for a signal or for work to be done.
     chan_select! {
         signal.recv() -> signal => {
             println!("received signal: {:?}", signal);
-            video_ingest::terminate();
+            worker_pool.terminate();
         },
-        rdone.recv() => {
+        recv.recv() => {
             println!("Program completed normally.");
         }
     }
@@ -35,6 +39,10 @@ fn main() {
 ///
 /// Runs the ingest
 ///
-fn run(_sdone: chan::Sender<()>) {
-    video_ingest::ingest();
+/// We needed to return worker_pool because of borrowing.  TODO: Find a way around this.
+///
+fn run(send: chan::Sender<()>, mut worker_pool: WorkerPool) -> WorkerPool {
+    worker_pool.ingest();
+
+    return worker_pool;
 }
