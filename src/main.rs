@@ -51,7 +51,6 @@ fn main() {
 ///
 fn run(please_stop: Arc<AtomicBool>, mut worker_pool: WorkerPool, wp: WP)  {
     while !please_stop.load(Ordering::SeqCst) {
-        println!("Looping...");
         worker_pool.ingest(&wp);
         worker_pool.terminate();
     }

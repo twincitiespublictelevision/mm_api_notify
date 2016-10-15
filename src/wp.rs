@@ -21,13 +21,10 @@ impl WP {
     ///
     /// Gets all shows from the WordPress database
     ///
-    pub fn get_shows<'a>(&self) -> Vec<WPShow<'a>> {
-        println!("Getting shows...");
-
-        return vec![
-            WPShow { id: 1, video_id: "1"},
-            WPShow { id: 2, video_id: "2"},
-            WPShow { id: 3, video_id: "3"}
-        ];
+    pub fn get_show<'a>(&self, id:u64) -> WPShow<'a> {
+        WPShow { 
+            id: 1, 
+            video_id: "1"
+        }
     }
 }
