@@ -12,7 +12,7 @@ pub struct WP {
 impl WP {
 
     // Gets the pool ready
-    pub fn new(&self) -> Self {
+    pub fn new() -> Self {
         WP {
             pool: my::Pool::new("mysql://root:root@localhost:3306").unwrap()
         }
@@ -21,9 +21,13 @@ impl WP {
     ///
     /// Gets all shows from the WordPress database
     ///
-    pub fn get_shows(&self) -> Vec<WPShow> {
+    pub fn get_shows<'a>(&self) -> Vec<WPShow<'a>> {
+        println!("Getting shows...");
+
         return vec![
-            WPShow { id: 1, video_id: "1"}
+            WPShow { id: 1, video_id: "1"},
+            WPShow { id: 2, video_id: "2"},
+            WPShow { id: 3, video_id: "3"}
         ];
     }
 }

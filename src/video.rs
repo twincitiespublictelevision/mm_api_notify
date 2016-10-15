@@ -6,13 +6,13 @@ use super::wp;
 /// Holds a video object
 ///
 pub struct Video<'a> {
-    tp_media_id: &'a str
+    pub tp_media_id: &'a str
 }
 
 ///
 /// Gets all videos from COVE for a show.
 ///
-pub fn get_videos<'a>(show: &wp::WPShow) -> Vec<Video<'a>> {
+pub fn get_videos<'a>(show: wp::WPShow) -> Vec<Video<'a>> {
     println!("Getting videos for show: {}", show.id);
 
     return vec![

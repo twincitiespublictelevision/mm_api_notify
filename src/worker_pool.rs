@@ -1,7 +1,7 @@
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::Duration;
-use super::wp::WPShow;
+
+use super::wp::WP;
 use super::video;
 
 /// 
@@ -25,14 +25,22 @@ impl WorkerPool {
     ///
     /// Does the actual ingestion
     ///
-    pub fn ingest(&mut self, shows: &Vec<WPShow>) {
-        self.join_handles.extend(
-            shows.iter().map(|show| {
+    pub fn ingest(&mut self, wp: &WP) {
+        println!("Ingesting...");
+
+        for show in wp.get_shows() {
+            println!("Show: {}", show.id);
+
+            self.join_handles.push( 
                 thread::spawn(move || {
-                    video::get_videos(show);
+                    println!("Launching thread to get videos...");
+                    
+                    for video in video::get_videos(show) {
+                        println!("Received video {}: ", video.tp_media_id);
+                    }
                 })
-            })
-        );
+            )
+        }
     }
 
     ///

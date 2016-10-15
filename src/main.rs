@@ -3,18 +3,21 @@ extern crate chan;
 extern crate chan_signal;
 extern crate video_ingest;
 
-use chan_signal::Signal;
 use video_ingest::worker_pool::WorkerPool;
+use video_ingest::wp::WP;
+
+use chan_signal::Signal;
 use std::thread;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use wp::WP;
 
 ///
 /// Starts processing
 /// 
 fn main() {
-    let worker_pool = WorkerPool { join_handles: vec![] };
+
+    // Set up the worker pool for the threads.
+    let worker_pool = WorkerPool::new();
     
     // Signal gets a value when the OS sent a INT or TERM signal.
     let signal = chan_signal::notify(&[Signal::INT, Signal::TERM]);
@@ -48,9 +51,8 @@ fn main() {
 ///
 fn run(please_stop: Arc<AtomicBool>, mut worker_pool: WorkerPool, wp: WP)  {
     while !please_stop.load(Ordering::SeqCst) {
-        let shows = wp.get_shows();
-
-        worker_pool.ingest(shows);
+        println!("Looping...");
+        worker_pool.ingest(&wp);
         worker_pool.terminate();
     }
 }
