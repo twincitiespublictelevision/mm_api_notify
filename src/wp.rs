@@ -5,23 +5,25 @@ pub struct WPShow<'a> {
     pub video_id: &'a str
 }
 
-pub fn initialize_pool() -> my::Pool {
-    return my::Pool::new("mysql://root:root@localhost:3306").unwrap();
+pub struct WP {
+    pool: my::Pool
 }
 
-///
-/// Gets all shows from the WordPress database
-///
-pub fn get_shows<'a>(pool: my::Pool) -> Vec<WPShow<'a>> {
-     return vec![
-         WPShow { id: 1, video_id: "1"}
-     ];
-}
+impl WP {
 
-#[cfg(test)]
-mod test {
+    // Gets the pool ready
+    pub fn new(&self) -> Self {
+        WP {
+            pool: my::Pool::new("mysql://root:root@localhost:3306").unwrap()
+        }
+    }
 
-    #[test]
-    pub fn test_get_shows() {
+    ///
+    /// Gets all shows from the WordPress database
+    ///
+    pub fn get_shows(&self) -> Vec<WPShow> {
+        return vec![
+            WPShow { id: 1, video_id: "1"}
+        ];
     }
 }

@@ -4,39 +4,53 @@ extern crate chan_signal;
 extern crate video_ingest;
 
 use chan_signal::Signal;
-use video_ingest::WorkerPool;
+use video_ingest::worker_pool::WorkerPool;
 use std::thread;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use wp::WP;
 
 ///
 /// Starts processing
 /// 
 fn main() {
-    let mut worker_pool = WorkerPool { join_handles: vec![] };
+    let worker_pool = WorkerPool { join_handles: vec![] };
     
     // Signal gets a value when the OS sent a INT or TERM signal.
     let signal = chan_signal::notify(&[Signal::INT, Signal::TERM]);
 
-    // When our work is complete, send a sentinel value on `sdone`.
-    let (sdone, rdone) = chan::sync(0);
+    // Used to signal the main thread to stop.
+    let please_stop = Arc::new(AtomicBool::new(false));
+
+    // Clone for the running thread.
+    let threads_please_stop = please_stop.clone();
+
+    // One WordPress instance.
+    let wp = WP::new();
 
     // Run work.
-    thread::spawn(|| run(sdone, &mut worker_pool));
+    let runner = thread::spawn(|| run(threads_please_stop, worker_pool, wp));
 
     // Wait for a signal or for work to be done.
     chan_select! {
         signal.recv() -> signal => {
-            println!("received signal: {:?}", signal);
-            worker_pool.terminate();
-        },
-        rdone.recv() => {
-            println!("Program completed normally.");
+            println!("Received signal: {:?}", signal);
+            please_stop.store(true, Ordering::SeqCst);
         }
     }
+
+    runner.join().expect("Unable to join runner thread.");
+    println!("Program complete.");
 }
 
-fn run(sdone: chan::Sender<()>, worker_pool: &mut WorkerPool) {
-    loop {
-        worker_pool.ingest();
+// 
+/// Runs the main thread.
+///
+fn run(please_stop: Arc<AtomicBool>, mut worker_pool: WorkerPool, wp: WP)  {
+    while !please_stop.load(Ordering::SeqCst) {
+        let shows = wp.get_shows();
+
+        worker_pool.ingest(shows);
         worker_pool.terminate();
     }
 }
