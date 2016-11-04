@@ -9,7 +9,7 @@ pub struct Video<'a> {
     pub data: &'a str
 }
 
-impl Video<'a> {
+impl<'a> Video<'a> {
 
     ///
     /// Does a Mongo upsert off the tp_media_object_id
@@ -20,7 +20,7 @@ impl Video<'a> {
 
     ///
     /// Deletes all records where not in the list passed in
-    pub fn delete_where_not_in(ids_to_save: Vec<&str>) {
+    pub fn delete_where_not_in(ids_to_save: &Vec<&str>) {
 
     }
 } 
@@ -33,7 +33,7 @@ pub struct Program<'a> {
     pub data: &'a str
 }
 
-impl Program<'a> {
+impl<'a> Program<'a> {
 
     ///
     /// Does a Mongo upsert off the tp_media_object_id
@@ -44,7 +44,7 @@ impl Program<'a> {
 
     ///
     /// Deletes all records where not in the list passed in
-    pub fn delete_where_not_in(ids_to_save: Vec<&str>) {
+    pub fn delete_where_not_in(ids_to_save: &Vec<&str>) {
 
     }
 }

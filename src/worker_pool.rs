@@ -1,7 +1,6 @@
 use std::thread;
 use std::thread::JoinHandle;
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
+use std::sync::Arc;
 
 use super::video;
 
@@ -26,64 +25,35 @@ impl WorkerPool {
     ///
     /// Does the actual ingestion
     ///
-    pub fn ingest(&mut self, wp: &WP) {
-        let programs_to_save:Vec<&str> = vec![];
-        let videos_to_save:Vec<&str> = vec![];
-        let shared_programs_to_save = Arc::new(Mutex::new(programs_to_save));
-        let shared_videos_to_save = Arc::new(Mutex::new(videos_to_save));
-        let total_programs = video::get_total_programs();
-        let i = 0;
-        let shared_i = Arc::new(i);
-        let total_videos = HashMap::new();
-        let shared_total_videos = Arc::new(Mutex::new(total_videos));
-        let video_counters = HashMap::new();
-        let shared_video_counters = Arc::new(Mutex::new(video_counters));
+    pub fn ingest(&mut self) {
+        let mut i = Arc::new(0);
 
-        while (i < total_programs) {
+        for i in (0..video::get_total_programs()).step_by(200) {
+            let i = i.clone();
+
             self.join_handles.push(
                 thread::spawn(move || {
-                    for program in video::get_programs(shared_i) {
-                        let shared_program = Arc::new(program);
+                    for program in video::get_programs(i) {
                         program.save();
-                        shared_programs_to_save.lock();
-                        shared_programs_to_save.push(program.program_id);
-                        shared_programs_to_save.unlock();
-
-                        shared_total_videos.lock();
-                        let total_videos = video::get_video_count_for_program(program);
-                        shared_total_videos.insert(program.program_id, total_videos);
-
-                        shared_video_counters.lock();
-                        shared_video_counters.insert(program.program_id, 0);
-                        shared_video_counters.unlock();
-
-                        while (shared_video_counters.get(program.program_id) < shared_total_videos.get(program.program_id)) {
+                        let mut j = Arc::new(0);
+                        let program_to_share = Arc::new(&program);
+                        
+                        for j in (0..video::get_video_count_for_program(&program)).step_by(200) {
+                            let j = j.clone();
+                            let program_to_share = program_to_share.clone();
+                            
                             self.join_handles.push( 
                                 thread::spawn(move || {
-                                    for video in video::get_videos(shared_program.clone(), shared_video_counters.get(program.program_id)) {
+                                    for video in video::get_videos(&program_to_share, j) {
                                         video.save();
-
-                                        videos_to_save.lock();
-                                        videos_to_save.push(video.tp_media_object_id);
-                                        videos_to_save.unlock();
                                     }
-                                });
+                                })
                             );
-
-                            shared_video_counters.lock();
-                            shared_video_counters.set(program.program_id, shared_video_counters.get(program.program_id) + 200);
-                            shared_video_counters.unlock();
                         }
                     }
-                });
+                })
             );
-
-            i += 200;
         }
-
-        // Get rid of the old stuff.
-        video::Program::delete_where_not_in(programs_to_save);
-        video::Video::delete_where_not_in(videos_to_save);
     }
 
     ///

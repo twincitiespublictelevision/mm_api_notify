@@ -4,7 +4,6 @@ extern crate chan_signal;
 extern crate video_ingest;
 
 use video_ingest::worker_pool::WorkerPool;
-use video_ingest::wp::WP;
 
 use chan_signal::Signal;
 use std::thread;
@@ -28,11 +27,8 @@ fn main() {
     // Clone for the running thread.
     let threads_please_stop = please_stop.clone();
 
-    // One WordPress instance.
-    let wp = WP::new();
-
     // Run work.
-    let runner = thread::spawn(|| run(threads_please_stop, worker_pool, wp));
+    let runner = thread::spawn(|| run(threads_please_stop, worker_pool));
 
     // Wait for a signal or for work to be done.
     chan_select! {
@@ -49,9 +45,9 @@ fn main() {
 // 
 /// Runs the main thread.
 ///
-fn run(please_stop: Arc<AtomicBool>, mut worker_pool: WorkerPool, wp: WP)  {
+fn run(please_stop: Arc<AtomicBool>, mut worker_pool: WorkerPool)  {
     while !please_stop.load(Ordering::SeqCst) {
-        worker_pool.ingest(&wp);
+        worker_pool.ingest();
         worker_pool.terminate();
     }
 }
