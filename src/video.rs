@@ -21,12 +21,6 @@ impl<'a> Video<'a> {
     pub fn save(&self) {
 
     }
-
-    ///
-    /// Deletes all records where not in the list passed in
-    pub fn delete_where_not_in(ids_to_save: &Vec<&str>) {
-
-    }
 } 
 
 ///
@@ -40,15 +34,9 @@ pub struct Program<'a> {
 impl<'a> Program<'a> {
 
     ///
-    /// Does a Mongo upsert off the tp_media_object_id
+    /// Does a Mongo upsert off the program_id
     ///
     pub fn save(&self) {
-
-    }
-
-    ///
-    /// Deletes all records where not in the list passed in
-    pub fn delete_where_not_in(ids_to_save: &Vec<&str>) {
 
     }
 }
@@ -64,15 +52,13 @@ pub fn ingest() {
         
         worker_pool.join_handles.push(thread::spawn(move || {
             let programs = get_programs(i);
-            println!("Getting program: {}", i);
-
+           
             for program in programs {
                 let total_videos = get_video_count_for_program(&program);
                 let mut worker_pool = worker_pool::WorkerPool::new();
                 let program = Arc::new(program);
                     
                 for j in (0..total_videos).step_by(200) {
-                    println!("Getting videos: {}", j);
                     let shared_program = program.clone();
 
                     worker_pool.join_handles.push(thread::spawn(move || {
@@ -88,7 +74,6 @@ pub fn ingest() {
     }
 }
 
-
 ///
 /// Makes an API call
 ///
@@ -96,7 +81,7 @@ fn video_api<'a>(endpoint: &str, filters: Vec<[&str; 2]>, fields: Vec<&str>) -> 
     let mut url = format!("http://api.pbs.org/cove/v1/{}", endpoint);
 
     for filter in filters {
-    url = format!("{}&{}={}", url, filter[0], filter[1]);
+        url = format!("{}&{}={}", url, filter[0], filter[1]);
     }
 
     return "";
