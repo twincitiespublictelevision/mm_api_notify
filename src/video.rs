@@ -1,9 +1,9 @@
 extern crate mongodb;
-extern crate curl;
 
 use super::worker_pool;
 use std::thread;
 use std::sync::Arc;
+use curl::easy::Easy;
 
 ///
 /// Holds a video object
@@ -72,19 +72,6 @@ pub fn ingest() {
 
         worker_pool.wait_for_children();
     }
-}
-
-///
-/// Makes an API call
-///
-fn video_api<'a>(endpoint: &str, filters: Vec<[&str; 2]>, fields: Vec<&str>) -> &'a str {
-    let mut url = format!("http://api.pbs.org/cove/v1/{}", endpoint);
-
-    for filter in filters {
-        url = format!("{}&{}={}", url, filter[0], filter[1]);
-    }
-
-    return "";
 }
 
 /// 
