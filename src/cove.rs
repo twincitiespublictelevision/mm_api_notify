@@ -2,6 +2,7 @@ extern crate hyper;
 extern crate url;
 extern crate time;
 extern crate crypto;
+extern crate rustc_serialize;
 
 use self::url::Url;
 use self::crypto::md5::Md5;
@@ -12,6 +13,7 @@ use self::crypto::mac::Mac;
 use self::hyper::client::Client;
 use std::str;
 use std::io::Read;
+use self::rustc_serialize::hex::ToHex;
 
 const API_ID: &'static str = "KTCA-ad82ca26-2d29-47f5-b4e7-24605cc834fa";
 const API_SECRET: &'static str = "9dc5083a-df6b-4c48-96c8-e32c2ad12720";
@@ -20,29 +22,29 @@ const API_SECRET: &'static str = "9dc5083a-df6b-4c48-96c8-e32c2ad12720";
 /// Makes an API call
 ///
 pub fn video_api(endpoint: &str, filters: Vec<[&str; 2]>, fields: Vec<&str>) -> String {
-    let mut url = format!("http://api.pbs.org/cove/v1/{}", endpoint);
+    let mut url = format!("http://api.pbs.org/cove/v1/{}?", endpoint);
     let mut filter_str:String = String::from("");
 
     for filter in filters {
-        let separator = if filter_str == "" { "?" } else { "&amp" };
-        filter_str = format!("{}{}{}={}", filter_str, separator, filter[0], filter[1]);
+        filter_str = format!("{}{}={}", filter_str, filter[0], filter[1]);
     }
 
     let timestamp = time::now().to_timespec().sec;
     let mut md5 = Md5::new();
     md5.input_str(timestamp.to_string().as_str());
     let nonce = md5.result_str();
-    let separator = if filter_str == "" { "?" } else { "&amp" };
-    url = normalize_url(format!("{}{}consumer_key={}&amp;timestamp={}&amp;nonce={}", url, separator, API_ID, timestamp, nonce));
+    url = normalize_url(format!("{}consumer_key={}&timestamp={}&nonce={}", url, API_ID, timestamp, nonce));
     let signature = calc_signature(&url, timestamp, nonce);
+    println!("{}&signature={}", url, signature);
 
     let client = Client::new();
-    let mut res = client.get(format!("{}&amp;signature={}", url, signature).as_str()).send().unwrap();
+    let mut res = client.get(format!("{}&signature={}", url, signature).as_str()).send().unwrap();
     let mut data = Vec::new();
     res.read_to_end(&mut data).unwrap();
+    println!("{}", res.status);
 
     String::from_utf8(data).unwrap()
-}
+ }
 
 /// 
 /// Calculates the signature necessary to call the API
@@ -52,7 +54,7 @@ fn calc_signature<'a>(url: &String, timestamp: i64, nonce: String) -> String {
     let mut hmac = Hmac::new(Sha1::new(), Vec::from(API_SECRET).as_slice());
     hmac.input(string_to_sign.as_bytes());
 
-    str::from_utf8(hmac.result().code()).unwrap().to_string()
+    hmac.result().code().to_hex()
 }
 
 ///
