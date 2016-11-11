@@ -3,13 +3,13 @@ extern crate mongodb;
 use super::worker_pool;
 use std::thread;
 use std::sync::Arc;
-use curl::easy::Easy;
+
+use super::cove;
 
 ///
 /// Holds a video object
 ///
 pub struct Video<'a> {
-    pub tp_media_object_id: &'a str,
     pub data: &'a str
 }
 
@@ -27,7 +27,6 @@ impl<'a> Video<'a> {
 /// Holds a show object
 ///
 pub struct Program<'a> {
-    pub program_id: &'a str,
     pub data: &'a str,
 }
 
@@ -78,7 +77,10 @@ pub fn ingest() {
 /// Gets the total programs to break them up
 ///
 fn get_total_programs() -> u64 {
-    1000
+    let dst = cove::video_api("programs", vec![], vec![]);
+    println!("{}", dst);
+
+    1
 }
 
 ///
@@ -86,9 +88,9 @@ fn get_total_programs() -> u64 {
 ///
 fn get_programs<'a>(start_index: u64) -> Vec<Program<'a>> {
     vec![
-        Program {program_id: "1", data: "1"},
-        Program {program_id: "2", data: "2"},
-        Program {program_id: "3", data: "3"}
+        Program {data: "1"},
+        Program {data: "2"},
+        Program {data: "3"}
     ]
 }
 
@@ -96,7 +98,7 @@ fn get_programs<'a>(start_index: u64) -> Vec<Program<'a>> {
 /// Gets the total videos for a program so they can be chunked
 ///
 fn get_video_count_for_program<'a>(program: &Program) -> u64 {
-    1000
+    1
 }
 
 ///
@@ -104,8 +106,8 @@ fn get_video_count_for_program<'a>(program: &Program) -> u64 {
 ///
 fn get_videos<'a>(j: u64, program: &Arc<Program>) -> Vec<Video<'a>> {
      vec![
-        Video {tp_media_object_id: "1", data: "1"},
-        Video {tp_media_object_id: "2", data: "2"},
-        Video {tp_media_object_id: "3", data: "3"}
+        Video {data: "1"},
+        Video {data: "2"},
+        Video {data: "3"}
     ]
 }
