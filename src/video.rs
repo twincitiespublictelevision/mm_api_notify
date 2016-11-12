@@ -77,7 +77,7 @@ pub fn ingest() {
 /// Gets the total programs to break them up
 ///
 fn get_total_programs() -> u64 {
-    let dst = cove::video_api("programs", vec![], vec![]);
+    let dst = cove::video_api("programs", vec![]);
     println!("{}", dst);
 
     1

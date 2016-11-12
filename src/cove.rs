@@ -3,6 +3,7 @@ extern crate url;
 extern crate time;
 extern crate crypto;
 extern crate rustc_serialize;
+extern crate rand;
 
 use self::url::Url;
 use self::crypto::md5::Md5;
@@ -21,17 +22,18 @@ const API_SECRET: &'static str = "9dc5083a-df6b-4c48-96c8-e32c2ad12720";
 ///
 /// Makes an API call
 ///
-pub fn video_api(endpoint: &str, filters: Vec<[&str; 2]>, fields: Vec<&str>) -> String {
-    let mut url = format!("http://api.pbs.org/cove/v1/{}?", endpoint);
+pub fn video_api(endpoint: &str, filters: Vec<[&str; 2]>) -> String {
+    let mut url = format!("http://api.pbs.org/cove/v1/{}/?", endpoint);
     let mut filter_str:String = String::from("");
 
     for filter in filters {
-        filter_str = format!("{}{}={}", filter_str, filter[0], filter[1]);
+        filter_str = format!("{}={}&", filter[0], filter[1]);
     }
 
     let timestamp = time::now().to_timespec().sec;
     let mut md5 = Md5::new();
-    md5.input_str(timestamp.to_string().as_str());
+    let random_int:u32 = rand::random();
+    md5.input_str(random_int.to_string().as_str());
     let nonce = md5.result_str();
     url = normalize_url(format!("{}consumer_key={}&timestamp={}&nonce={}", url, API_ID, timestamp, nonce));
     let signature = calc_signature(&url, timestamp, nonce);
@@ -66,5 +68,5 @@ fn normalize_url(url: String) -> String {
     let mut vec_query: Vec<&str> = query.split("&").collect();
     vec_query.sort();
     
-    format!("{}://{}/{}?{}", parts.scheme(), parts.host().unwrap(), parts.path(), vec_query.join("&"))
+    format!("{}://{}{}?{}", parts.scheme(), parts.host().unwrap(), parts.path(), vec_query.join("&"))
 }
