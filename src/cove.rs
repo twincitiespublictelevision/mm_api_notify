@@ -4,6 +4,8 @@ extern crate time;
 extern crate crypto;
 extern crate rustc_serialize;
 extern crate rand;
+extern crate serde;
+extern crate serde_json;
 
 use self::url::Url;
 use self::crypto::md5::Md5;
@@ -15,6 +17,7 @@ use self::hyper::client::Client;
 use std::str;
 use std::io::Read;
 use self::rustc_serialize::hex::ToHex;
+use self::serde_json::Value;
 
 const API_ID: &'static str = "KTCA-ad82ca26-2d29-47f5-b4e7-24605cc834fa";
 const API_SECRET: &'static str = "9dc5083a-df6b-4c48-96c8-e32c2ad12720";
@@ -22,7 +25,7 @@ const API_SECRET: &'static str = "9dc5083a-df6b-4c48-96c8-e32c2ad12720";
 ///
 /// Makes an API call
 ///
-pub fn video_api(endpoint: &str, filters: Vec<[&str; 2]>) -> String {
+pub fn video_api(endpoint: &str, filters: Vec<[&str; 2]>) -> Value {
     let mut url = format!("http://api.pbs.org/cove/v1/{}/?", endpoint);
     let mut filter_str:String = String::from("");
 
@@ -37,16 +40,13 @@ pub fn video_api(endpoint: &str, filters: Vec<[&str; 2]>) -> String {
     let nonce = md5.result_str();
     url = normalize_url(format!("{}consumer_key={}&timestamp={}&nonce={}", url, API_ID, timestamp, nonce));
     let signature = calc_signature(&url, timestamp, nonce);
-    println!("{}&signature={}", url, signature);
-
     let client = Client::new();
     let mut res = client.get(format!("{}&signature={}", url, signature).as_str()).send().unwrap();
     let mut data = Vec::new();
     res.read_to_end(&mut data).unwrap();
-    println!("{}", res.status);
-
-    String::from_utf8(data).unwrap()
- }
+   
+    serde_json::from_str(String::from_utf8(data).unwrap().as_str()).unwrap()
+}
 
 /// 
 /// Calculates the signature necessary to call the API

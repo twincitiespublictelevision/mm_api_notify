@@ -77,10 +77,7 @@ pub fn ingest() {
 /// Gets the total programs to break them up
 ///
 fn get_total_programs() -> u64 {
-    let dst = cove::video_api("programs", vec![]);
-    println!("{}", dst);
-
-    1
+    cove::video_api("programs", vec![]).as_object().unwrap().get("count").unwrap().as_u64().unwrap()
 }
 
 ///
@@ -98,7 +95,7 @@ fn get_programs<'a>(start_index: u64) -> Vec<Program<'a>> {
 /// Gets the total videos for a program so they can be chunked
 ///
 fn get_video_count_for_program<'a>(program: &Program) -> u64 {
-    1
+   cove::video_api("videos", vec![]).as_object().unwrap().get("count").unwrap().as_u64().unwrap()
 }
 
 ///
