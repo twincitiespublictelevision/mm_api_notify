@@ -7,7 +7,7 @@ use video_ingest::worker_pool::WorkerPool;
 use video_ingest::video;
 
 use chan_signal::Signal;
-use std::thread;
+use std::{thread, time};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -46,7 +46,13 @@ fn main() {
 /// Runs the main thread.
 ///
 fn run(please_stop: Arc<AtomicBool>)  {
+    let first_time = true;
+
     while !please_stop.load(Ordering::SeqCst) {
-        video::ingest();
+        video::ingest(first_time);
+        first_time = false;
+
+        let five_minutes = time::Duration::from_mintues(5);
+        thread::sleep(five_minutes);
     }
 }
