@@ -25,12 +25,12 @@ const API_SECRET: &'static str = "9dc5083a-df6b-4c48-96c8-e32c2ad12720";
 ///
 /// Makes an API call
 ///
-pub fn video_api(endpoint: &str, filters: Vec<[&str; 2]>) -> Value {
+pub fn video_api(endpoint: &str, params: Vec<[&str; 2]>) -> Value {
     let mut url = format!("http://api.pbs.org/cove/v1/{}/?", endpoint);
-    let mut filter_str:String = String::from("");
+    let mut params_str:String = String::from("");
 
-    for filter in filters {
-        filter_str = format!("{}={}&", filter[0], filter[1]);
+    for param in params {
+        params_str = format!("{}{}={}&", params_str, param[0], param[1]);
     }
 
     let timestamp = time::now().to_timespec().sec;
@@ -38,7 +38,7 @@ pub fn video_api(endpoint: &str, filters: Vec<[&str; 2]>) -> Value {
     let random_int:u32 = rand::random();
     md5.input_str(random_int.to_string().as_str());
     let nonce = md5.result_str();
-    url = normalize_url(format!("{}consumer_key={}&timestamp={}&nonce={}", url, API_ID, timestamp, nonce));
+    url = normalize_url(format!("{}{}consumer_key={}&timestamp={}&nonce={}", url, params_str, API_ID, timestamp, nonce));
     let signature = calc_signature(&url, timestamp, nonce);
     let client = Client::new();
     let mut res = client.get(format!("{}&signature={}", url, signature).as_str()).send().unwrap();

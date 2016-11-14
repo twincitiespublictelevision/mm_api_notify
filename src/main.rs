@@ -3,11 +3,10 @@ extern crate chan;
 extern crate chan_signal;
 extern crate video_ingest;
 
-use video_ingest::worker_pool::WorkerPool;
 use video_ingest::video;
 
 use chan_signal::Signal;
-use std::{thread, time};
+use std::thread;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -25,10 +24,7 @@ fn main() {
     // Clone for the running thread.
     let threads_please_stop = please_stop.clone();
 
-    // Set up the worker pool for the threads.
-    let mut worker_pool = WorkerPool::new();
-
-    worker_pool.join_handles.push(thread::spawn(move || run(threads_please_stop)));
+    let join_handle = thread::spawn(move || run(threads_please_stop));
 
     // Wait for a signal or for work to be done.
     chan_select! {
@@ -38,7 +34,7 @@ fn main() {
         }
     }
 
-    worker_pool.wait_for_children();
+    join_handle.join().expect("Unable to join main thread.");
     println!("Program complete.");
 }
 

@@ -29,38 +29,48 @@ pub fn ingest(first_time: bool) {
         let current_time = time::now_utc();
         updated_date = Arc::new(format!("{}-{}-{}", current_time.tm_year, current_time.tm_mon, current_time.tm_mday));
     }
+
+    let mut worker_pool = worker_pool::WorkerPool::new(5);
       
     for i in (0..total_programs).step_by(200) {
         let shared_updated_date = updated_date.clone();
         println!("Processing program set {} of {}", i, total_programs);
-        let mut worker_pool = worker_pool::WorkerPool::new();
-               
+        
+        worker_pool.wait_for_a_spot();
         worker_pool.join_handles.push(thread::spawn(move || {
             let programs = get_programs(i);
+            let mut worker_pool = worker_pool::WorkerPool::new(10);
            
             for program in programs {
-                let total_videos = get_video_count_for_program(&program);
-                let mut worker_pool = worker_pool::WorkerPool::new();
-                let program = Arc::new(program);
+                let shared_updated_date = shared_updated_date.clone();
+                println!("Processing program {}", program.program_id);
 
-                for j in (0..total_videos).step_by(200) {
-                    println!("Processing video set {} of {}", j, total_videos);
-                    let shared_program = program.clone();
-                    let shared_updated_date = shared_updated_date.clone();
+                worker_pool.wait_for_a_spot();
+                worker_pool.join_handles.push(thread::spawn(move || {
+                    let total_videos = get_video_count_for_program(&program);
+                    let mut worker_pool = worker_pool::WorkerPool::new(5);
+                    let program = Arc::new(program);
 
-                    worker_pool.join_handles.push(thread::spawn(move || {
-                        get_videos(&shared_updated_date, j, &shared_program);
-                    }));
-                }
+                    for j in (0..total_videos).step_by(200) {
+                        println!("Processing video set {} of {} for program {}", j, total_videos, program.program_id);
+                        let shared_program = program.clone();
+                        let shared_updated_date = shared_updated_date.clone();
 
-                worker_pool.wait_for_children();
-                break;
+                        worker_pool.wait_for_a_spot();
+                        worker_pool.join_handles.push(thread::spawn(move || {
+                            get_videos(&shared_updated_date, j, &shared_program);
+                        }));
+                    }
+
+                    worker_pool.wait_for_children();
+                }));
             }
-        }));
 
-        worker_pool.wait_for_children();
-        break;
+            worker_pool.wait_for_children();
+        }));
     }
+
+    worker_pool.wait_for_children();
 }
 
 /// 
@@ -94,7 +104,10 @@ fn get_programs(start_index: u64) -> Vec<Program> {
 /// Gets the total videos for a program so they can be chunked
 ///
 fn get_video_count_for_program<'a>(program: &Program) -> u64 {
-    cove::video_api("videos", vec![["program_id", program.program_id.to_string().as_str()]]).as_object().unwrap().get("count").unwrap().as_u64().unwrap()
+    cove::video_api("videos", vec![
+        ["filter_program", program.program_id.to_string().as_str()],
+        ["exclude_type", "Other"]
+    ]).as_object().unwrap().get("count").unwrap().as_u64().unwrap()
 }
 
 ///
@@ -103,9 +116,13 @@ fn get_video_count_for_program<'a>(program: &Program) -> u64 {
 fn get_videos<'a>(updated_date: &Arc<String>, start_index: u64, program: &Arc<Program>) {
     let program_id = program.program_id.to_string();
     let str_start_index = start_index.to_string();
-    let mut params = vec![["program_id", program_id.as_str()], ["limit_start", str_start_index.as_str()]];
+    let mut params = vec![
+        ["filter_program", program_id.as_str()], 
+        ["limit_start", str_start_index.as_str()],
+        ["exclude_type", "Other"]
+    ];
     
-    if updated_date.as_str() == "" {
+    if updated_date.as_str() != "" {
         params.push(["filter_record_last_updated_datetime__gt", updated_date.as_str()]);
     }
 
