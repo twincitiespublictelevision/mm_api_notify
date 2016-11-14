@@ -6,15 +6,15 @@ extern crate serde_json;
 use super::worker_pool;
 use std::thread;
 use std::sync::Arc;
-use self::serde_json::{Value, Map};
+use self::serde_json::Value;
 
 use super::cove;
 
 ///
 /// Holds a show object
 ///
-pub struct Program<'a> {
-    pub data: &'a str,
+pub struct Program {
+    pub data: String,
     pub program_id: u64
 }
 
@@ -54,10 +54,12 @@ pub fn ingest(first_time: bool) {
                 }
 
                 worker_pool.wait_for_children();
+                break;
             }
         }));
 
         worker_pool.wait_for_children();
+        break;
     }
 }
 
@@ -71,18 +73,18 @@ fn get_total_programs() -> u64 {
 ///
 /// Gets all the shows from COVE
 ///
-fn get_programs<'a>(start_index: u64) -> Vec<Program<'a>> {
+fn get_programs(start_index: u64) -> Vec<Program> {
     let cove_data = cove::video_api("programs", vec![["limit_start", start_index.to_string().as_str()]]);
     let programs: &Vec<Value> = cove_data.as_object().unwrap().get("results").unwrap().as_array().unwrap();
     let mut programs_data = vec![];
 
     for program in programs {
         let program_uri = program.as_object().unwrap().get("resource_uri").unwrap().as_str().unwrap();
-        let program_id: u64 = program_uri.split("/").nth(3).unwrap().parse().unwrap();
+        let program_id: u64 = program_uri.split("/").nth(4).unwrap().parse().unwrap();
 
         // Do the mongo insert.
 
-        programs_data.push(Program {data: program.as_str().unwrap().clone(), program_id: program_id});
+        programs_data.push(Program {data: program.to_string(), program_id: program_id});
     }
 
     programs_data
@@ -99,8 +101,9 @@ fn get_video_count_for_program<'a>(program: &Program) -> u64 {
 /// Gets all videos from COVE for a program, 200 at a time
 ///
 fn get_videos<'a>(updated_date: &Arc<String>, start_index: u64, program: &Arc<Program>) {
-    let program_id = program.program_id.to_string().as_str();
-    let mut params = vec![["program_id", program_id], ["limit_start", start_index.to_string().as_str()]];
+    let program_id = program.program_id.to_string();
+    let str_start_index = start_index.to_string();
+    let mut params = vec![["program_id", program_id.as_str()], ["limit_start", str_start_index.as_str()]];
     
     if updated_date.as_str() == "" {
         params.push(["filter_record_last_updated_datetime__gt", updated_date.as_str()]);
@@ -108,7 +111,7 @@ fn get_videos<'a>(updated_date: &Arc<String>, start_index: u64, program: &Arc<Pr
 
     let cove_data = cove::video_api("videos", params);
     let videos:&Vec<Value> = cove_data.as_object().unwrap().get("results").unwrap().as_array().unwrap();
-    
+
     for video in videos {
 
         // Do the mongo insert.
