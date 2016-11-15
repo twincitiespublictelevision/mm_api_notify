@@ -13,7 +13,7 @@ use self::mongodb::db::{Database, ThreadedDatabase};
 use self::mongodb::coll::options::FindOneAndUpdateOptions;
 
 ///
-/// Holds a show object
+/// Holds a program object
 ///
 pub struct Program {
     pub data: String,
@@ -32,7 +32,7 @@ pub fn ingest(first_time: bool, db: &Database) {
         updated_date = Arc::new(format!("{}-{}-{}", current_time.tm_year, current_time.tm_mon, current_time.tm_mday));
     }
 
-    let mut worker_pool = worker_pool::WorkerPool::new(3);
+    let mut worker_pool = worker_pool::WorkerPool::new(10);
       
     for i in (0..total_programs).step_by(200) {
         let shared_updated_date = updated_date.clone();
