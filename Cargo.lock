@@ -2,7 +2,7 @@
 name = "video_ingest"
 version = "0.1.0"
 dependencies = [
- "bson 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bson 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "chan 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "chan-signal 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.9.12 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -34,22 +34,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "bitflags"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "bson"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "byteorder 0.3.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.2.25 (registry+https://github.com/rust-lang/crates.io-index)",
- "libc 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)",
- "num 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
- "rust-crypto 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-serialize 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 0.6.15 (registry+https://github.com/rust-lang/crates.io-index)",
- "time 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "bson"
@@ -420,14 +404,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "serde"
-version = "0.6.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "num 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "serde"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
@@ -542,7 +518,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum bit-set 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e6e1e6fb1c9e3d6fcdec57216a74eaa03e41f52a22f13a16438251d8e88b89da"
 "checksum bit-vec 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "5b97c2c8e8bbb4251754f559df8af22fb264853c7d009084a576cdf12565089d"
 "checksum bitflags 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "aad18937a628ec6abcd26d1489012cc0e18c21798210f491af69ded9b881106d"
-"checksum bson 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "29ff75ff5cda02ee5726ad6ed4e5dfc50529940efaa70fa3df834e254fef64d0"
 "checksum bson 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "e9d7e1e0467f4c9818a21f7d5a8ea14701dc48b6ab71310eb3b8a55a34a9a6a4"
 "checksum bufstream 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7b48dbe2ff0e98fa2f03377d204a9637d3c9816cd431bfe05a8abbd0ea11d074"
 "checksum byteorder 0.3.13 (registry+https://github.com/rust-lang/crates.io-index)" = "29b2aa490a8f546381308d68fc79e6bd753cd3ad839f7a7172897f1feedfa175"
@@ -589,7 +564,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum scan_fmt 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "fa6802ea974ecc8dc187344c6836df3681a5392489bb0342c1baf0da4f67d8b4"
 "checksum semver 0.1.20 (registry+https://github.com/rust-lang/crates.io-index)" = "d4f410fedcf71af0345d7607d246e7ad15faaadd49d240ee3b24e5dc21a820ac"
 "checksum separator 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "7acc4d818f952ed02e7911df5da8098c8b00a3c5ba2832e035a750b56e8fc32b"
-"checksum serde 0.6.15 (registry+https://github.com/rust-lang/crates.io-index)" = "c97b18e9e53de541f11e497357d6c5eaeb39f0cb9c8734e274abe4935f6991fa"
 "checksum serde 0.8.12 (registry+https://github.com/rust-lang/crates.io-index)" = "f6b2f52afebb4708a21b9d721dbac942daa010f8478c6486daa48d62d5c70508"
 "checksum serde_json 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e5b3bb42fa42265df8a1822b3db2090bc8f9e17e8142599c76a5b854bc4e7b5b"
 "checksum solicit 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "172382bac9424588d7840732b250faeeef88942e37b6e35317dce98cafdd75b2"

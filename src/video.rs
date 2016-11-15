@@ -1,18 +1,16 @@
-extern crate bson;
-extern crate mongodb;
 extern crate time;
 extern crate serde;
 extern crate serde_json;
+extern crate mongodb;
 
 use super::worker_pool;
-use super::config;
+use super::cove;
 
 use std::thread;
 use std::sync::Arc;
 use self::serde_json::Value;
-use self::mongodb::{Client, ThreadedClient};
 use self::mongodb::db::{Database, ThreadedDatabase};
-use super::cove;
+use self::mongodb::coll::options::FindOneAndUpdateOptions;
 
 ///
 /// Holds a show object
@@ -23,21 +21,9 @@ pub struct Program {
 }
 
 ///
-/// Does mongo connection stuff
-///
-fn connect() -> Database {
-    let client = Client::connect("localhost", 27017).ok().expect("Failed to initialize client.");
-    let db = client.db(config::DB_NAME);
-    db.auth(config::DB_USERNAME, config::DB_PASSWORD)
-        .ok().expect("Failed to authorize user.");
-
-    db
-}
-
-///
 /// Does the actual ingestion
 ///
-pub fn ingest(first_time: bool) {
+pub fn ingest(first_time: bool, db: &Database) {
     let total_programs = get_total_programs();
     let mut updated_date = Arc::new(String::from(""));
    
@@ -46,20 +32,38 @@ pub fn ingest(first_time: bool) {
         updated_date = Arc::new(format!("{}-{}-{}", current_time.tm_year, current_time.tm_mon, current_time.tm_mday));
     }
 
-    let mut worker_pool = worker_pool::WorkerPool::new(10);
+    let mut worker_pool = worker_pool::WorkerPool::new(3);
       
     for i in (0..total_programs).step_by(200) {
         let shared_updated_date = updated_date.clone();
+        let shared_db = db.clone();
         println!("Processing program set {} of {}", i, total_programs);
         
         worker_pool.wait_for_a_spot();
         worker_pool.join_handles.push(thread::spawn(move || {
             let programs = get_programs(i);
             let mut worker_pool = worker_pool::WorkerPool::new(5);
-            let db = connect();
-
+            let coll = shared_db.collection("programs");
+            
             for program in programs {
+                let program_id = program.program_id;
+                let program_data = program.data.clone();
+
+                let filter = doc! {
+                    "program_id" => program_id
+                };
+
+                let update = doc! {
+                    "program_id" => program_id,
+                    "data" => program_data
+                };
+
+                let mut options = FindOneAndUpdateOptions::new();
+                options.upsert = true;
+                
+                coll.find_one_and_replace(filter, update, Some(options)).expect("Can't insert program into database!");
                 let shared_updated_date = shared_updated_date.clone();
+                let shared_db = shared_db.clone();
                 println!("Processing program {}", program.program_id);
 
                 worker_pool.wait_for_a_spot();
@@ -72,10 +76,11 @@ pub fn ingest(first_time: bool) {
                         println!("Processing video set {} of {} for program {}", j, total_videos, program.program_id);
                         let shared_program = program.clone();
                         let shared_updated_date = shared_updated_date.clone();
+                        let shared_db = shared_db.clone();
                         
                         worker_pool.wait_for_a_spot();
                         worker_pool.join_handles.push(thread::spawn(move || {
-                            get_videos(&shared_updated_date, j, &shared_program);
+                            get_videos(&shared_updated_date, j, &shared_program, &shared_db);
                         }));
                     }
 
@@ -130,7 +135,7 @@ fn get_video_count_for_program<'a>(program: &Program) -> u64 {
 ///
 /// Gets all videos from COVE for a program, 200 at a time
 ///
-fn get_videos<'a>(updated_date: &Arc<String>, start_index: u64, program: &Arc<Program>) {
+fn get_videos<'a>(updated_date: &Arc<String>, start_index: u64, program: &Arc<Program>, db: &Database) {
     let program_id = program.program_id.to_string();
     let str_start_index = start_index.to_string();
     let mut params = vec![
@@ -145,10 +150,32 @@ fn get_videos<'a>(updated_date: &Arc<String>, start_index: u64, program: &Arc<Pr
 
     let cove_data = cove::video_api("videos", params);
     let videos:&Vec<Value> = cove_data.as_object().unwrap().get("results").unwrap().as_array().unwrap();
-    let db = connect();
+    let coll = db.collection("videos");
 
     for video in videos {
+        
+        //
+        // Not everything has a tp_media_object_id.  Ignore the ones that don't.
+        //
+        match video.as_object().unwrap().get("tp_media_object_id").unwrap().as_u64() {
+            Some(tp_media_object_id) => {
+                let video_data = video.to_string();
 
-        // Do the mongo insert.
+                let filter = doc! {
+                    "tp_media_object_id" => tp_media_object_id
+                };
+
+                let update = doc! {
+                    "tp_media_object_id" => tp_media_object_id,
+                    "data" => video_data
+                };
+
+                let mut options = FindOneAndUpdateOptions::new();
+                options.upsert = true;
+                
+                coll.find_one_and_replace(filter, update, Some(options)).expect("Can't insert video into database!");
+            },
+            None => {}
+        };
     }
 }
