@@ -1,13 +1,17 @@
+extern crate bson;
 extern crate mongodb;
 extern crate time;
 extern crate serde;
 extern crate serde_json;
 
 use super::worker_pool;
+use super::config;
+
 use std::thread;
 use std::sync::Arc;
 use self::serde_json::Value;
-
+use self::mongodb::{Client, ThreadedClient};
+use self::mongodb::db::{Database, ThreadedDatabase};
 use super::cove;
 
 ///
@@ -19,18 +23,30 @@ pub struct Program {
 }
 
 ///
+/// Does mongo connection stuff
+///
+fn connect() -> Database {
+    let client = Client::connect("localhost", 27017).ok().expect("Failed to initialize client.");
+    let db = client.db(config::DB_NAME);
+    db.auth(config::DB_USERNAME, config::DB_PASSWORD)
+        .ok().expect("Failed to authorize user.");
+
+    db
+}
+
+///
 /// Does the actual ingestion
 ///
 pub fn ingest(first_time: bool) {
     let total_programs = get_total_programs();
     let mut updated_date = Arc::new(String::from(""));
-
+   
     if !first_time {
         let current_time = time::now_utc();
         updated_date = Arc::new(format!("{}-{}-{}", current_time.tm_year, current_time.tm_mon, current_time.tm_mday));
     }
 
-    let mut worker_pool = worker_pool::WorkerPool::new(5);
+    let mut worker_pool = worker_pool::WorkerPool::new(10);
       
     for i in (0..total_programs).step_by(200) {
         let shared_updated_date = updated_date.clone();
@@ -39,8 +55,9 @@ pub fn ingest(first_time: bool) {
         worker_pool.wait_for_a_spot();
         worker_pool.join_handles.push(thread::spawn(move || {
             let programs = get_programs(i);
-            let mut worker_pool = worker_pool::WorkerPool::new(10);
-           
+            let mut worker_pool = worker_pool::WorkerPool::new(5);
+            let db = connect();
+
             for program in programs {
                 let shared_updated_date = shared_updated_date.clone();
                 println!("Processing program {}", program.program_id);
@@ -55,7 +72,7 @@ pub fn ingest(first_time: bool) {
                         println!("Processing video set {} of {} for program {}", j, total_videos, program.program_id);
                         let shared_program = program.clone();
                         let shared_updated_date = shared_updated_date.clone();
-
+                        
                         worker_pool.wait_for_a_spot();
                         worker_pool.join_handles.push(thread::spawn(move || {
                             get_videos(&shared_updated_date, j, &shared_program);
@@ -128,6 +145,7 @@ fn get_videos<'a>(updated_date: &Arc<String>, start_index: u64, program: &Arc<Pr
 
     let cove_data = cove::video_api("videos", params);
     let videos:&Vec<Value> = cove_data.as_object().unwrap().get("results").unwrap().as_array().unwrap();
+    let db = connect();
 
     for video in videos {
 
