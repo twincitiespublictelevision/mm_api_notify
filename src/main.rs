@@ -1,5 +1,6 @@
 extern crate video_ingest;
 extern crate mongodb;
+extern crate time;
 
 use video_ingest::video;
 use video_ingest::config;
@@ -20,9 +21,13 @@ fn main() {
 
     // Get things going.  After the first run it will look for only updates.    
     let mut first_time = true;
+    let mut start_time = time::now();
 
     loop {
         video::ingest(first_time, &db);
         first_time = false;
+        let end_time = time::now();
+        println!("Ingest took {} seconds", end_time - start_time);
+        start_time = end_time;
     }
 }

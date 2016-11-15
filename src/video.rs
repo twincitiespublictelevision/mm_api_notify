@@ -29,7 +29,7 @@ pub fn ingest(first_time: bool, db: &Database) {
    
     if !first_time {
         let current_time = time::now_utc();
-        updated_date = Arc::new(format!("{}-{}-{}", current_time.tm_year, current_time.tm_mon, current_time.tm_mday));
+        updated_date = Arc::new(format!("{}-{}-{}", 1900 + current_time.tm_year, current_time.tm_mon, current_time.tm_mday));
     }
 
     let mut worker_pool = worker_pool::WorkerPool::new(10);
@@ -37,7 +37,6 @@ pub fn ingest(first_time: bool, db: &Database) {
     for i in (0..total_programs).step_by(200) {
         let shared_updated_date = updated_date.clone();
         let shared_db = db.clone();
-        println!("Processing program set {} of {}", i, total_programs);
         
         worker_pool.wait_for_a_spot();
         worker_pool.join_handles.push(thread::spawn(move || {
@@ -64,16 +63,14 @@ pub fn ingest(first_time: bool, db: &Database) {
                 coll.find_one_and_replace(filter, update, Some(options)).expect("Can't insert program into database!");
                 let shared_updated_date = shared_updated_date.clone();
                 let shared_db = shared_db.clone();
-                println!("Processing program {}", program.program_id);
-
+               
                 worker_pool.wait_for_a_spot();
                 worker_pool.join_handles.push(thread::spawn(move || {
-                    let total_videos = get_video_count_for_program(&program);
+                    let total_videos = get_video_count_for_program(&shared_updated_date, &program);
                     let mut worker_pool = worker_pool::WorkerPool::new(5);
                     let program = Arc::new(program);
 
                     for j in (0..total_videos).step_by(200) {
-                        println!("Processing video set {} of {} for program {}", j, total_videos, program.program_id);
                         let shared_program = program.clone();
                         let shared_updated_date = shared_updated_date.clone();
                         let shared_db = shared_db.clone();
@@ -125,11 +122,18 @@ fn get_programs(start_index: u64) -> Vec<Program> {
 ///
 /// Gets the total videos for a program so they can be chunked
 ///
-fn get_video_count_for_program<'a>(program: &Program) -> u64 {
-    cove::video_api("videos", vec![
-        ["filter_program", program.program_id.to_string().as_str()],
+fn get_video_count_for_program<'a>(updated_date: &Arc<String>, program: &Program) -> u64 {
+    let program_id = program.program_id.to_string();
+    let mut params = vec![
+        ["filter_program", program_id.as_str()], 
         ["exclude_type", "Other"]
-    ]).as_object().unwrap().get("count").unwrap().as_u64().unwrap()
+    ];
+
+    if updated_date.as_str() != "" {
+        params.push(["filter_record_last_updated_datetime__gt", updated_date.as_str()]);
+    }
+
+    cove::video_api("videos", params).as_object().unwrap().get("count").unwrap().as_u64().unwrap()
 }
 
 ///
