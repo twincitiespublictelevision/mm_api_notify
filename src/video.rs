@@ -107,9 +107,7 @@ fn get_programs(start_index: u64) -> Vec<Program> {
     for program in programs {
         let program_uri = program.as_object().unwrap().get("resource_uri").unwrap().as_str().unwrap();
         let program_id: u64 = program_uri.split("/").nth(4).unwrap().parse().unwrap();
-
-        // Do the mongo insert.
-
+        
         programs_data.push(Program {data: program.to_string(), program_id: program_id});
     }
 
