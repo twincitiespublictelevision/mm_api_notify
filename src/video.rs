@@ -95,7 +95,7 @@ pub fn ingest(first_time: bool, db: &Database, num_workers: usize) {
                 let video_ids_str = format!("[{}]", video_ids.lock().unwrap().join(","));
                 let filter = doc! {
                     "tp_media_object_id" => video_ids_str,
-                    "cond" => "$ne"
+                    "cond" => "$nin"
                 };
 
                 let video_coll = final_shared_db.collection("videos");
