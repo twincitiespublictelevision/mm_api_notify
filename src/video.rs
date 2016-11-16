@@ -32,14 +32,13 @@ pub fn ingest(first_time: bool, db: &Database) {
         updated_date = Arc::new(format!("{}-{}-{}", 1900 + current_time.tm_year, current_time.tm_mon, current_time.tm_mday));
     }
 
-    let mut worker_pool = worker_pool::WorkerPool::new(10);
+    let mut worker_pool = worker_pool::WorkerPool::new(5);
       
     for i in (0..total_programs).step_by(200) {
         let shared_updated_date = updated_date.clone();
         let shared_db = db.clone();
         
-        worker_pool.wait_for_a_spot();
-        worker_pool.join_handles.push(thread::spawn(move || {
+        worker_pool.add_worker(thread::spawn(move || {
             let programs = get_programs(i);
             let mut worker_pool = worker_pool::WorkerPool::new(5);
             let coll = shared_db.collection("programs");
@@ -64,8 +63,7 @@ pub fn ingest(first_time: bool, db: &Database) {
                 let shared_updated_date = shared_updated_date.clone();
                 let shared_db = shared_db.clone();
                
-                worker_pool.wait_for_a_spot();
-                worker_pool.join_handles.push(thread::spawn(move || {
+                worker_pool.add_worker(thread::spawn(move || {
                     let total_videos = get_video_count_for_program(&shared_updated_date, &program);
                     let mut worker_pool = worker_pool::WorkerPool::new(5);
                     let program = Arc::new(program);
@@ -75,8 +73,7 @@ pub fn ingest(first_time: bool, db: &Database) {
                         let shared_updated_date = shared_updated_date.clone();
                         let shared_db = shared_db.clone();
                         
-                        worker_pool.wait_for_a_spot();
-                        worker_pool.join_handles.push(thread::spawn(move || {
+                        worker_pool.add_worker(thread::spawn(move || {
                             get_videos(&shared_updated_date, j, &shared_program, &shared_db);
                         }));
                     }

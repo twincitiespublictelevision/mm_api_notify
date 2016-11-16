@@ -1,10 +1,11 @@
 use std::thread::JoinHandle;
+use std::collections::VecDeque;
 
 /// 
 /// Implements a worker pool for threads
 ///
 pub struct WorkerPool { 
-    pub join_handles: Vec<JoinHandle<()>>,
+    pub join_handles: VecDeque<JoinHandle<()>>,
     pub max_handles: usize
 }
 
@@ -15,19 +16,21 @@ impl WorkerPool {
     ///
     pub fn new(max_handles: usize) -> WorkerPool {
         WorkerPool {
-            join_handles: vec![],
+            join_handles: VecDeque::new(),
             max_handles: max_handles
         }
     } 
 
     ///
-    /// Waits for handle to free up
+    /// Adds a worker
     ///
-    pub fn wait_for_a_spot(&mut self) {
+    pub fn add_worker(&mut self, new_handle: JoinHandle<()>) {
         while self.join_handles.len() >= self.max_handles {
-            let join_handle = self.join_handles.pop().unwrap();
+            let join_handle = self.join_handles.pop_front().unwrap();
             join_handle.join().expect("Unable to join thread waiting for a spot.");
         }
+
+        self.join_handles.push_back(new_handle);
     }
 
     ///
