@@ -12,8 +12,7 @@ use std::sync::{Arc, Mutex};
 use self::serde_json::Value;
 use self::mongodb::db::{Database, ThreadedDatabase};
 use self::mongodb::coll::options::FindOneAndUpdateOptions;
-use self::bson::Document;
-use self::bson::Bson;
+use self::bson::{Document, Bson};
 
 ///
 /// Holds a program object
@@ -65,11 +64,6 @@ pub fn ingest(first_time: bool, db: &Database, num_workers: usize) {
 
                 let shared_updated_date = shared_updated_date.clone();
                 let shared_db = shared_db.clone();
-
-                // We need this final shared DB because shared_db is moved into the thread so it can't be used to delete
-                // at the end.
-                let final_shared_db = shared_db.clone();
-
                 let shared_video_ids = video_ids.clone();
                
                 worker_pool.add_worker(thread::spawn(move || {
@@ -77,7 +71,8 @@ pub fn ingest(first_time: bool, db: &Database, num_workers: usize) {
                     let mut worker_pool = worker_pool::WorkerPool::new(num_workers);
                     let program = Arc::new(program);
                     let shared_video_ids = shared_video_ids.clone();
-                    
+                    let final_shared_video_ids = shared_video_ids.clone();
+
                     for j in (0..total_videos).step_by(200) {
                         let shared_program = program.clone();
                         let shared_updated_date = shared_updated_date.clone();
@@ -90,16 +85,28 @@ pub fn ingest(first_time: bool, db: &Database, num_workers: usize) {
                     }
 
                     worker_pool.wait_for_children();
+
+                    // Delete videos that no longer exist.
+                    let video_ids_lock = final_shared_video_ids.lock().unwrap();
+                    let video_ids_arr = Bson::Array(video_ids_lock.clone().iter().map(|x| bson::to_bson(x).unwrap()).collect());
+
+                    let filter = doc! {
+                        "$and" => [
+                        {
+                            "program_id" => {
+                                "$eq" => program_id
+                            }
+                        },
+                        { 
+                            "tp_media_object_id" => {
+                                "$nin" => video_ids_arr
+                            }
+                        }
+                    ]};
+
+                    let video_coll = shared_db.collection("videos");
+                    video_coll.delete_many(filter, None).ok().expect("Error deleting records from database!");
                 }));
-
-                let video_ids_str = format!("[{}]", video_ids.lock().unwrap().join(","));
-                let filter = doc! {
-                    "tp_media_object_id" => video_ids_str,
-                    "cond" => "$nin"
-                };
-
-                let video_coll = final_shared_db.collection("videos");
-                video_coll.delete_many(filter, None).unwrap();
             }
 
             worker_pool.wait_for_children();
@@ -154,7 +161,7 @@ fn get_video_count_for_program<'a>(updated_date: &Arc<String>, program: &Program
 ///
 /// Gets all videos from COVE for a program, 200 at a time
 ///
-fn get_videos(updated_date: &Arc<String>, start_index: u64, program: &Arc<Program>, db: &Database, video_ids: &Arc<Mutex<Vec<String>>>) {
+fn get_videos(updated_date: &Arc<String>, start_index: u64, program: &Arc<Program>, db: &Database, video_ids: &Arc<Mutex<Vec<u64>>>) {
     let program_id = program.program_id.to_string();
     let str_start_index = start_index.to_string();
     let mut params = vec![
@@ -179,7 +186,7 @@ fn get_videos(updated_date: &Arc<String>, start_index: u64, program: &Arc<Progra
         //
         match video.as_object().unwrap().get("tp_media_object_id").unwrap().as_u64() {
             Some(tp_media_object_id) => {
-                page_video_ids.push(tp_media_object_id.to_string());
+                page_video_ids.push(tp_media_object_id);
                
                 let filter = doc! {
                     "tp_media_object_id" => tp_media_object_id
