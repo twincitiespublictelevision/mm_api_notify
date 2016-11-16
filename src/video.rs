@@ -2,6 +2,7 @@ extern crate time;
 extern crate serde;
 extern crate serde_json;
 extern crate mongodb;
+extern crate bson;
 
 use super::worker_pool;
 use super::cove;
@@ -11,6 +12,8 @@ use std::sync::{Arc, Mutex};
 use self::serde_json::Value;
 use self::mongodb::db::{Database, ThreadedDatabase};
 use self::mongodb::coll::options::FindOneAndUpdateOptions;
+use self::bson::Document;
+use self::bson::Bson;
 
 ///
 /// Holds a program object
@@ -44,18 +47,17 @@ pub fn ingest(first_time: bool, db: &Database, num_workers: usize) {
             let coll = shared_db.collection("programs");
             
             for program in programs {
-                let program_id = program.program_id;
-                let program_data = program.data.clone();
                 let video_ids = Arc::new(Mutex::new(vec![]));
+                let program_id = program.program_id;
 
                 let filter = doc! {
                     "program_id" => program_id
                 };
 
-                let update = doc! {
-                    "program_id" => program_id,
-                    "data" => program_data
-                };
+                // Can't use doc! macro because it escapes the JSON data.
+                let mut update = Document::new();
+                update.insert("program_id", program_id);
+                update.insert("data", Bson::JavaScriptCode(program.data.clone()));
 
                 let mut options = FindOneAndUpdateOptions::new();
                 options.upsert = true;
@@ -178,18 +180,16 @@ fn get_videos(updated_date: &Arc<String>, start_index: u64, program: &Arc<Progra
         match video.as_object().unwrap().get("tp_media_object_id").unwrap().as_u64() {
             Some(tp_media_object_id) => {
                 page_video_ids.push(tp_media_object_id.to_string());
-                let video_data = video.to_string();
-                let program_id = program.program_id;
-
+               
                 let filter = doc! {
                     "tp_media_object_id" => tp_media_object_id
                 };
 
-                let update = doc! {
-                    "tp_media_object_id" => tp_media_object_id,
-                    "program_id" => program_id,
-                    "data" => video_data
-                };
+                // Can't use doc! macro because it escapes the data.
+                let mut update = Document::new();
+                update.insert("tp_media_object_id", tp_media_object_id);
+                update.insert("program_id", program.program_id);
+                update.insert("data", Bson::JavaScriptCode(video.to_string()));
 
                 let mut options = FindOneAndUpdateOptions::new();
                 options.upsert = true;

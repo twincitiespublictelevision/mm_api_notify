@@ -44,8 +44,9 @@ pub fn video_api(endpoint: &str, params: Vec<[&str; 2]>) -> Value {
     let mut res = client.get(format!("{}&signature={}", url, signature).as_str()).send().unwrap();
     let mut data = Vec::new();
     res.read_to_end(&mut data).unwrap();
-   
-    serde_json::from_str(String::from_utf8(data).unwrap().as_str()).unwrap()
+    let data = serde_json::from_str(String::from_utf8(data).unwrap().as_str()).unwrap();
+
+    data
 }
 
 /// 
