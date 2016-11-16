@@ -23,16 +23,16 @@ pub struct Program {
 ///
 /// Does the actual ingestion
 ///
-pub fn ingest(first_time: bool, db: &Database) {
+pub fn ingest(first_time: bool, db: &Database, num_workers: usize) {
     let total_programs = get_total_programs();
     let mut updated_date = Arc::new(String::from(""));
-   
+    
     if !first_time {
         let current_time = time::now_utc();
         updated_date = Arc::new(format!("{}-{}-{}", 1900 + current_time.tm_year, current_time.tm_mon, current_time.tm_mday));
     }
 
-    let mut worker_pool = worker_pool::WorkerPool::new(5);
+    let mut worker_pool = worker_pool::WorkerPool::new(num_workers);
       
     for i in (0..total_programs).step_by(200) {
         let shared_updated_date = updated_date.clone();
@@ -40,7 +40,7 @@ pub fn ingest(first_time: bool, db: &Database) {
         
         worker_pool.add_worker(thread::spawn(move || {
             let programs = get_programs(i);
-            let mut worker_pool = worker_pool::WorkerPool::new(5);
+            let mut worker_pool = worker_pool::WorkerPool::new(num_workers);
             let coll = shared_db.collection("programs");
             
             for program in programs {
@@ -65,7 +65,7 @@ pub fn ingest(first_time: bool, db: &Database) {
                
                 worker_pool.add_worker(thread::spawn(move || {
                     let total_videos = get_video_count_for_program(&shared_updated_date, &program);
-                    let mut worker_pool = worker_pool::WorkerPool::new(5);
+                    let mut worker_pool = worker_pool::WorkerPool::new(num_workers);
                     let program = Arc::new(program);
 
                     for j in (0..total_videos).step_by(200) {
