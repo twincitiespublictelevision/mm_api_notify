@@ -1,6 +1,5 @@
 extern crate time;
-extern crate serde;
-extern crate serde_json;
+extern crate rustc_serialize;
 extern crate mongodb;
 extern crate bson;
 
@@ -9,16 +8,16 @@ use super::cove;
 
 use std::thread;
 use std::sync::{Arc, Mutex};
-use self::serde_json::Value;
 use self::mongodb::db::{Database, ThreadedDatabase};
 use self::mongodb::coll::options::FindOneAndUpdateOptions;
 use self::bson::{Document, Bson};
+use self::rustc_serialize::json::Json;
 
 ///
 /// Holds a program object
 ///
 pub struct Program {
-    pub data: String,
+    pub data: Json,
     pub program_id: u64
 }
 
@@ -28,9 +27,9 @@ pub struct Program {
 pub fn ingest(first_time: bool, db: &Database, num_workers: usize) {
     let total_programs = get_total_programs();
     let mut updated_date = Arc::new(String::from(""));
+    let current_time = time::now_utc();
     
     if !first_time {
-        let current_time = time::now_utc();
         updated_date = Arc::new(format!("{}-{}-{}", 1900 + current_time.tm_year, current_time.tm_mon, current_time.tm_mday));
     }
 
@@ -53,10 +52,9 @@ pub fn ingest(first_time: bool, db: &Database, num_workers: usize) {
                     "program_id" => program_id
                 };
 
-                // Can't use doc! macro because it escapes the JSON data.
                 let mut update = Document::new();
                 update.insert("program_id", program_id);
-                update.insert("data", Bson::JavaScriptCode(program.data.clone()));
+                update.insert("data", Bson::from_json(&program.data));
 
                 let mut options = FindOneAndUpdateOptions::new();
                 options.upsert = true;
@@ -70,9 +68,7 @@ pub fn ingest(first_time: bool, db: &Database, num_workers: usize) {
                     let total_videos = get_video_count_for_program(&shared_updated_date, &program);
                     let mut worker_pool = worker_pool::WorkerPool::new(num_workers);
                     let program = Arc::new(program);
-                    let shared_video_ids = shared_video_ids.clone();
-                    let final_shared_video_ids = shared_video_ids.clone();
-
+                    
                     for j in (0..total_videos).step_by(200) {
                         let shared_program = program.clone();
                         let shared_updated_date = shared_updated_date.clone();
@@ -84,36 +80,60 @@ pub fn ingest(first_time: bool, db: &Database, num_workers: usize) {
                         }));
                     }
 
-                    worker_pool.wait_for_children();
+                    worker_pool.wait_for_workers();
 
                     // Delete videos that no longer exist.
-                    let video_ids_lock = final_shared_video_ids.lock().unwrap();
+                    let video_ids_lock = shared_video_ids.lock().unwrap();
                     let video_ids_arr = Bson::Array(video_ids_lock.clone().iter().map(|x| bson::to_bson(x).unwrap()).collect());
+                    let filter;
 
-                    let filter = doc! {
-                        "$and" => [
-                        {
-                            "program_id" => {
-                                "$eq" => program_id
+                    if *shared_updated_date == "" {
+                        filter = doc! {
+                            "$and" => [
+                            {
+                                "program_id" => {
+                                    "$eq" => program_id
+                                }
+                            },
+                            { 
+                                "tp_media_object_id" => {
+                                    "$nin" => video_ids_arr
+                                }
                             }
-                        },
-                        { 
-                            "tp_media_object_id" => {
-                                "$nin" => video_ids_arr
+                        ]};
+                    } else {
+                        let updated_time = format!("{} 00:00:00", shared_updated_date);
+
+                        filter = doc! {
+                            "$and" => [
+                            {
+                                "program_id" => {
+                                    "$eq" => program_id
+                                }
+                            },
+                            { 
+                                "tp_media_object_id" => {
+                                    "$nin" => video_ids_arr
+                                }
+                            },
+                            {
+                                "data.record_last_updated_datetime" => {
+                                    "$gte" => updated_time
+                                }
                             }
-                        }
-                    ]};
+                        ]}; 
+                    }
 
                     let video_coll = shared_db.collection("videos");
                     video_coll.delete_many(filter, None).ok().expect("Error deleting records from database!");
                 }));
             }
 
-            worker_pool.wait_for_children();
+            worker_pool.wait_for_workers();
         }));
     }
 
-    worker_pool.wait_for_children();
+    worker_pool.wait_for_workers();
 }
 
 /// 
@@ -128,14 +148,14 @@ fn get_total_programs() -> u64 {
 ///
 fn get_programs(start_index: u64) -> Vec<Program> {
     let cove_data = cove::video_api("programs", vec![["limit_start", start_index.to_string().as_str()]]);
-    let programs: &Vec<Value> = cove_data.as_object().unwrap().get("results").unwrap().as_array().unwrap();
+    let programs: &Vec<Json> = cove_data.as_object().unwrap().get("results").unwrap().as_array().unwrap();
     let mut programs_data = vec![];
 
     for program in programs {
-        let program_uri = program.as_object().unwrap().get("resource_uri").unwrap().as_str().unwrap();
+        let program_uri = program.as_object().unwrap().get("resource_uri").unwrap().to_string();
         let program_id: u64 = program_uri.split("/").nth(4).unwrap().parse().unwrap();
 
-        programs_data.push(Program {data: program.to_string(), program_id: program_id});
+        programs_data.push(Program {data: program.clone(), program_id: program_id});
     }
 
     programs_data
@@ -175,7 +195,7 @@ fn get_videos(updated_date: &Arc<String>, start_index: u64, program: &Arc<Progra
     }
 
     let cove_data = cove::video_api("videos", params);
-    let videos:&Vec<Value> = cove_data.as_object().unwrap().get("results").unwrap().as_array().unwrap();
+    let videos:&Vec<Json> = cove_data.as_object().unwrap().get("results").unwrap().as_array().unwrap();
     let coll = db.collection("videos");
     let mut page_video_ids = vec![];
 
@@ -192,11 +212,10 @@ fn get_videos(updated_date: &Arc<String>, start_index: u64, program: &Arc<Progra
                     "tp_media_object_id" => tp_media_object_id
                 };
 
-                // Can't use doc! macro because it escapes the data.
                 let mut update = Document::new();
                 update.insert("tp_media_object_id", tp_media_object_id);
                 update.insert("program_id", program.program_id);
-                update.insert("data", Bson::JavaScriptCode(video.to_string()));
+                update.insert("data", Bson::from_json(video));
 
                 let mut options = FindOneAndUpdateOptions::new();
                 options.upsert = true;

@@ -34,11 +34,11 @@ impl WorkerPool {
     }
 
     ///
-    /// Waits for children to finish
+    /// Waits for workers to finish
     ///
-    pub fn wait_for_children(&mut self) {
+    pub fn wait_for_workers(&mut self) {
         for handle in self.join_handles.drain(..) {
-            handle.join().expect("Unable to join thread in waiting for children to finish.");
+            handle.join().expect("Unable to join thread in waiting for workers to finish.");
         }
     }
 }

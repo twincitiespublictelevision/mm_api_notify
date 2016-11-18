@@ -24,7 +24,7 @@ fn main() {
 
     println!("Running with {} workers in each pool...", num_workers);
    
-    // Set up the database connection
+    // Set up the database connection.
     let client = Client::connect("localhost", 27017).ok().expect("Failed to initialize client.");
     let db = client.db(config::DB_NAME);
     db.auth(config::DB_USERNAME, config::DB_PASSWORD)
