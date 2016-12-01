@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["johnsonpaul1014 <pjohnson@tpt.org>"]
 
 [dependencies]
+core_data_client = { git = "ssh://git@github.com/twincitiespublictelevision/core_data_client.git" }
 bson = "0.3.1"
 mongodb = "0.1.7"
 chan = "*"
