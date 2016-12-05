@@ -4,7 +4,7 @@ extern crate core_data_client;
 use std::error::Error;
 use std::result::Result;
 use std::fmt;
-use rustc_serialize::json::ParserError;
+use self::rustc_serialize::json::ParserError;
 use self::core_data_client::CDCError;
 
 pub type IngestResult<T> = Result<T, IngestError>;
@@ -15,6 +15,7 @@ pub enum IngestError {
     Parse(ParserError),
     InvalidObjDataError,
     InvalidRefDataError,
+    General,
 }
 
 impl fmt::Display for IngestError {
@@ -24,6 +25,7 @@ impl fmt::Display for IngestError {
             IngestError::Parse(ref err) => err.fmt(f),
             IngestError::InvalidObjDataError => write!(f, ""),
             IngestError::InvalidRefDataError => write!(f, ""),
+            IngestError::General => write!(f, ""),
         }
     }
 }
@@ -35,6 +37,7 @@ impl Error for IngestError {
             IngestError::Parse(ref err) => err.description(),
             IngestError::InvalidObjDataError => "",
             IngestError::InvalidRefDataError => "",
+            IngestError::General => "",
         }
     }
 
@@ -44,6 +47,7 @@ impl Error for IngestError {
             IngestError::Parse(ref err) => Some(err),
             IngestError::InvalidObjDataError => None,
             IngestError::InvalidRefDataError => None,
+            IngestError::General => None,
         }
     }
 }

@@ -1,25 +1,24 @@
 use std::thread::JoinHandle;
 use std::collections::VecDeque;
 
-/// 
+///
 /// Implements a worker pool for threads
 ///
-pub struct WorkerPool { 
+pub struct WorkerPool {
     pub join_handles: VecDeque<JoinHandle<()>>,
-    pub max_handles: usize
+    pub max_handles: usize,
 }
 
 impl WorkerPool {
-
     ///
     /// Constructor
     ///
     pub fn new(max_handles: usize) -> WorkerPool {
         WorkerPool {
             join_handles: VecDeque::new(),
-            max_handles: max_handles
+            max_handles: max_handles,
         }
-    } 
+    }
 
     ///
     /// Adds a worker
