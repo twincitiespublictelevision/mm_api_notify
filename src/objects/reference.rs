@@ -112,9 +112,6 @@ impl Ref {
                             }
                             None => Err(IngestError::InvalidObjDataError),
                         }
-
-                        // json.find("data").map_or(Err(IngestError::InvalidObjDataError),
-                        //                          |data_json| Ok(Object::new(data_json)))
                     }
                     Err(err) => Err(IngestError::Parse(err)),
                 }

@@ -13,6 +13,7 @@ pub type IngestResult<T> = Result<T, IngestError>;
 pub enum IngestError {
     API(CDCError),
     Parse(ParserError),
+    InvalidDocumentDataError,
     InvalidObjDataError,
     InvalidRefDataError,
     General,
@@ -23,6 +24,7 @@ impl fmt::Display for IngestError {
         match *self {
             IngestError::API(ref err) => err.fmt(f),
             IngestError::Parse(ref err) => err.fmt(f),
+            IngestError::InvalidDocumentDataError => write!(f, ""),
             IngestError::InvalidObjDataError => write!(f, ""),
             IngestError::InvalidRefDataError => write!(f, ""),
             IngestError::General => write!(f, ""),
@@ -35,6 +37,7 @@ impl Error for IngestError {
         match *self {
             IngestError::API(ref err) => err.description(),
             IngestError::Parse(ref err) => err.description(),
+            IngestError::InvalidDocumentDataError => "",
             IngestError::InvalidObjDataError => "",
             IngestError::InvalidRefDataError => "",
             IngestError::General => "",
@@ -45,6 +48,7 @@ impl Error for IngestError {
         match *self {
             IngestError::API(ref err) => Some(err),
             IngestError::Parse(ref err) => Some(err),
+            IngestError::InvalidDocumentDataError => None,
             IngestError::InvalidObjDataError => None,
             IngestError::InvalidRefDataError => None,
             IngestError::General => None,

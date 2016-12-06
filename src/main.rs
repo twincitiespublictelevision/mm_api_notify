@@ -13,129 +13,142 @@ extern crate core_data_client;
 extern crate rustc_serialize;
 
 mod config;
-mod types;
 mod error;
-mod worker_pool;
 mod objects;
+mod show_runner;
+mod types;
+mod worker_pool;
 
-use self::rustc_serialize::json::Json;
 use mongodb::{Client, ThreadedClient};
-use mongodb::db::{Database, ThreadedDatabase};
+use mongodb::db::ThreadedDatabase;
 use core_data_client::Client as APIClient;
 use std::sync::Arc;
-use std::thread;
-use objects::Object;
-use worker_pool::WorkerPool;
 use types::ThreadedAPI;
 
-fn run(page: usize, api: &ThreadedAPI, db: &Database) {
-
-    let response = api.shows().list(page);
-
-    let shows: Vec<Object> = Json::from_str(response.unwrap().as_str())
-        .unwrap()
-        .find("data")
-        .unwrap()
-        .as_array()
-        .unwrap()
-        .into_iter()
-        .map(Object::from_json)
-        .collect();
-
-    // shows[0].import(api, db, false);
-    for show in shows {
-        show.import(api, db, true);
-    }
-
-    // let mut pool = WorkerPool::new(POOL_SIZE);
-    //
-    // for show in shows {
-    //     let shared_client = client.clone();
-    //
-    //     pool.add_worker(thread::spawn(move || {
-    //         let show_title =
-    //             show.data.find("attributes").unwrap().find("title").unwrap().as_string().unwrap();
-    //         let seasons = show.seasons().unwrap_or(Vec::new());
-    //         let season_count = seasons.len();
-    //
-    //         println!("{}: Has {} seasons.", show_title, season_count);
-    //
-    //         let mut season_workers = WorkerPool::new(POOL_SIZE);
-    //
-    //         for season in seasons {
-    //             let shared_client = shared_client.clone();
-    //
-    //             season_workers.add_worker(thread::spawn(move || {
-    //                 let s = season.to_object(&shared_client).unwrap();
-    //                 let episodes = s.episodes().unwrap_or(Vec::new());
-    //                 let episode_count = episodes.len();
-    //                 println!("\tSeason {} has {} episodes.",
-    //                          s.attributes().unwrap().find("ordinal").unwrap(),
-    //                          episode_count);
-    //
-    //                 let mut episode_workers = WorkerPool::new(POOL_SIZE);
-    //
-    //                 for episode in episodes {
-    //                     let shared_client = shared_client.clone();
-    //
-    //                     episode_workers.add_worker(thread::spawn(move || {
-    //                         let e = episode.to_object(&shared_client).unwrap();
-    //                         let assets = e.assets().unwrap_or(Vec::new());
-    //                         let asset_count = assets.len();
-    //
-    //                         println!("\t\t{} has {} assets.",
-    //                                  e.attributes()
-    //                                      .unwrap()
-    //                                      .find("title")
-    //                                      .unwrap()
-    //                                      .as_string()
-    //                                      .unwrap(),
-    //                                  asset_count);
-    //                     }));
-    //                 }
-    //
-    //                 episode_workers.wait_for_workers();
-    //             }));
-    //         }
-    //
-    //         season_workers.wait_for_workers();
-    //     }));
-    // }
-    //
-    // pool.wait_for_workers();
-}
+// fn run(page: usize, api: &ThreadedAPI, db: &Database) {
+//
+//     let response = api.shows().list(page);
+//
+//     let shows: Vec<Object> = Json::from_str(response.unwrap().as_str())
+//         .unwrap()
+//         .find("data")
+//         .unwrap()
+//         .as_array()
+//         .unwrap()
+//         .into_iter()
+//         .map(Object::from_json)
+//         .collect();
+//
+//     // shows[0].import(api, db, false);
+//     for show in shows {
+//         show.import(api, db, true);
+//     }
+//
+//     // let mut pool = WorkerPool::new(POOL_SIZE);
+//     //
+//     // for show in shows {
+//     //     let shared_client = client.clone();
+//     //
+//     //     pool.add_worker(thread::spawn(move || {
+//     //         let show_title =
+//     //             show.data.find("attributes").unwrap().find("title").unwrap().as_string().unwrap();
+//     //         let seasons = show.seasons().unwrap_or(Vec::new());
+//     //         let season_count = seasons.len();
+//     //
+//     //         println!("{}: Has {} seasons.", show_title, season_count);
+//     //
+//     //         let mut season_workers = WorkerPool::new(POOL_SIZE);
+//     //
+//     //         for season in seasons {
+//     //             let shared_client = shared_client.clone();
+//     //
+//     //             season_workers.add_worker(thread::spawn(move || {
+//     //                 let s = season.to_object(&shared_client).unwrap();
+//     //                 let episodes = s.episodes().unwrap_or(Vec::new());
+//     //                 let episode_count = episodes.len();
+//     //                 println!("\tSeason {} has {} episodes.",
+//     //                          s.attributes().unwrap().find("ordinal").unwrap(),
+//     //                          episode_count);
+//     //
+//     //                 let mut episode_workers = WorkerPool::new(POOL_SIZE);
+//     //
+//     //                 for episode in episodes {
+//     //                     let shared_client = shared_client.clone();
+//     //
+//     //                     episode_workers.add_worker(thread::spawn(move || {
+//     //                         let e = episode.to_object(&shared_client).unwrap();
+//     //                         let assets = e.assets().unwrap_or(Vec::new());
+//     //                         let asset_count = assets.len();
+//     //
+//     //                         println!("\t\t{} has {} assets.",
+//     //                                  e.attributes()
+//     //                                      .unwrap()
+//     //                                      .find("title")
+//     //                                      .unwrap()
+//     //                                      .as_string()
+//     //                                      .unwrap(),
+//     //                                  asset_count);
+//     //                     }));
+//     //                 }
+//     //
+//     //                 episode_workers.wait_for_workers();
+//     //             }));
+//     //         }
+//     //
+//     //         season_workers.wait_for_workers();
+//     //     }));
+//     // }
+//     //
+//     // pool.wait_for_workers();
+// }
 
 ///
 /// Starts processing
 ///
 fn main() {
 
-    let start_time = time::now();
-
-    // // Set up the database connection.
+    // Set up the database connection.
     let client = Client::connect("localhost", 27017).ok().expect("Failed to initialize client.");
     let db = client.db(config::DB_NAME);
     db.auth(config::DB_USERNAME, config::DB_PASSWORD)
         .ok()
         .expect("Failed to authorize user.");
 
-
     let api: ThreadedAPI = Arc::new(APIClient::new("", ""));
 
-    let pages: usize = 10;
-    let mut page_pool = WorkerPool::new(config::pool_size_for(""));
+    let run_time = show_runner::run(&api, &db);
 
-    for x in 1..pages {
-        let shared_db = db.clone();
-        let shared_api = api.clone();
-        page_pool.add_worker(thread::spawn(move || {
-            run(x, &shared_api, &shared_db);
-        }));
+    match run_time {
+        Ok(time) => println!("Run took {} seconds", time),
+        Err(_) => println!("Failed to run to completion"),
     }
 
-    page_pool.wait_for_workers();
+    // let start_time = time::now();
+    //
+    // // // Set up the database connection.
+    // let client = Client::connect("localhost", 27017).ok().expect("Failed to initialize client.");
+    // let db = client.db(config::DB_NAME);
+    // db.auth(config::DB_USERNAME, config::DB_PASSWORD)
+    //     .ok()
+    //     .expect("Failed to authorize user.");
+    //
+    //
+    // let api: ThreadedAPI = Arc::new(APIClient::new("", ""));
+    //
+    // let pages: usize = 10;
+    // let mut page_pool = WorkerPool::new(config::pool_size_for(""));
+    //
+    // for x in 1..pages {
+    //     let shared_db = db.clone();
+    //     let shared_api = api.clone();
+    //     page_pool.add_worker(thread::spawn(move || {
+    //         run(x, &shared_api, &shared_db);
+    //     }));
+    // }
+    //
+    // page_pool.wait_for_workers();
 
-    println!("Run took {} seconds", time::now() - start_time);
+    // println!("Run took {} seconds", time::now() - start_time);
     // let response = client.shows().get("625ebeb7-040d-4a70-a6fd-47a04b1acf0f");
 
     // let show = Object::new(Json::from_str(response.unwrap().as_str())
