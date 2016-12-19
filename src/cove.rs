@@ -25,7 +25,7 @@ const API_SECRET: &'static str = "9dc5083a-df6b-4c48-96c8-e32c2ad12720";
 ///
 pub fn video_api(endpoint: &str, params: Vec<[&str; 2]>) -> Json {
     let mut url = format!("http://api.pbs.org/cove/v1/{}/?", endpoint);
-    let mut params_str:String = String::from("");
+    let mut params_str: String = String::from("");
 
     for param in params {
         params_str = format!("{}{}={}&", params_str, param[0], param[1]);
@@ -33,10 +33,15 @@ pub fn video_api(endpoint: &str, params: Vec<[&str; 2]>) -> Json {
 
     let timestamp = time::now().to_timespec().sec;
     let mut md5 = Md5::new();
-    let random_int:u32 = rand::random();
+    let random_int: u32 = rand::random();
     md5.input_str(random_int.to_string().as_str());
     let nonce = md5.result_str();
-    url = normalize_url(format!("{}{}consumer_key={}&timestamp={}&nonce={}", url, params_str, API_ID, timestamp, nonce));
+    url = normalize_url(format!("{}{}consumer_key={}&timestamp={}&nonce={}",
+                                url,
+                                params_str,
+                                API_ID,
+                                timestamp,
+                                nonce));
     let signature = calc_signature(&url, timestamp, nonce);
     let client = Client::new();
     let mut res = client.get(format!("{}&signature={}", url, signature).as_str()).send().unwrap();
@@ -47,7 +52,7 @@ pub fn video_api(endpoint: &str, params: Vec<[&str; 2]>) -> Json {
     data
 }
 
-/// 
+///
 /// Calculates the signature necessary to call the API
 ///
 fn calc_signature<'a>(url: &String, timestamp: i64, nonce: String) -> String {
@@ -66,6 +71,10 @@ fn normalize_url(url: String) -> String {
     let query: &str = parts.query().unwrap();
     let mut vec_query: Vec<&str> = query.split("&").collect();
     vec_query.sort();
-    
-    format!("{}://{}{}?{}", parts.scheme(), parts.host().unwrap(), parts.path(), vec_query.join("&"))
+
+    format!("{}://{}{}?{}",
+            parts.scheme(),
+            parts.host().unwrap(),
+            parts.path(),
+            vec_query.join("&"))
 }

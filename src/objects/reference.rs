@@ -1,7 +1,12 @@
-extern crate rustc_serialize;
 extern crate mongodb;
+extern crate serde;
+extern crate serde_json;
+extern crate chrono;
 
-use self::rustc_serialize::json::Json;
+use self::chrono::DateTime;
+use self::chrono::UTC;
+use self::serde_json::Value as Json;
+use self::serde_json::error::Result as JsonResult;
 use self::mongodb::db::{Database, ThreadedDatabase};
 use std::fmt;
 use types::ThreadedAPI;
@@ -26,29 +31,71 @@ impl Ref {
         }
     }
 
-    pub fn from_json(json: &Json) -> Ref {
-        let default = Json::from_str("{}").unwrap();
+    pub fn from_json(json: &Json) -> IngestResult<Ref> {
+        let default = serde_json::from_str("{}").unwrap();
 
-        let id = json.find("id").unwrap_or(&default);
-        let attributes = json.find("attributes").unwrap_or(&default);
+        let id = json.find("id");
+        let attributes = json.find("attributes");
         let links = json.find("links").unwrap_or(&default);
-        let ref_type = json.find("type").unwrap_or(&default);
+        let ref_type = json.find("type");
 
-        Ref::new(id, attributes, links, ref_type)
+        match and_list(vec![id, attributes, ref_type]) {
+            Some(mut value_list) => {
+                Ok(Ref::new(value_list.remove(0),
+                            value_list.remove(0),
+                            links,
+                            value_list.remove(0)))
+            }
+            None => Err(IngestError::InvalidDocumentDataError),
+        }
     }
 
-    pub fn import(&self, api: &ThreadedAPI, db: &Database, import_refs: bool) {
-        let lookup_result = self.to_object(api);
+    pub fn import(&self,
+                  api: &ThreadedAPI,
+                  db: &Database,
+                  import_refs: bool,
+                  run_start_time: i64) {
 
-        match lookup_result {
-            Ok(obj) => obj.import(api, db, import_refs),
-            Err(_) => (),
+        // Optimization: Asset types can not have child elements so if they are not going to be
+        // updated, then do not perform a lookup
+        let ref_type = self.ref_type.as_str().unwrap_or("");
+
+        let obj_lookup = match ref_type {
+            "asset" => {
+                let updated_at = self.attributes.find("updated_at");
+
+                match updated_at {
+                    Some(date_string) => {
+                        let date_str = date_string.as_str().unwrap_or("");
+                        let updated_at_time = date_str.parse::<DateTime<UTC>>();
+
+                        match updated_at_time {
+                            Ok(value) => {
+                                if value.timestamp() > run_start_time {
+                                    Some(self.to_object(api))
+                                } else {
+                                    None
+                                }
+                            }
+                            Err(_) => Some(self.to_object(api)),
+                        }
+                    }
+                    None => Some(self.to_object(api)),
+                }
+            }
+            _ => Some(self.to_object(api)),
+        };
+
+        match obj_lookup {
+            Some(Ok(obj)) => obj.import(api, db, import_refs, run_start_time),
+            Some(Err(_)) => (),
+            None => (),
         };
     }
 
     pub fn to_object(&self, api: &ThreadedAPI) -> IngestResult<Object> {
-        let object_type = self.ref_type.as_string().unwrap_or("");
-        let object_id = self.id.as_string().unwrap_or("");
+        let object_type = self.ref_type.as_str().unwrap_or("");
+        let object_id = self.id.as_str().unwrap_or("");
 
         if object_id == "" {
             return Err(IngestError::InvalidRefDataError);
@@ -95,20 +142,19 @@ impl Ref {
 
         match response {
             Ok(json_string) => {
-                match Json::from_str(json_string.as_str()) {
-                    Ok(json) => {
-                        let data = json.find("data");
+                let full_json: JsonResult<Json> = serde_json::from_str(json_string.as_str());
+                match full_json {
+                    Ok(mut json) => {
+                        let json_map = json.as_object_mut();
 
-                        match data {
-                            Some(data_json) => {
-                                let default = Json::from_str("{}").unwrap();
+                        match json_map {
+                            Some(map) => {
+                                let data = map.remove("data");
 
-                                let id = data_json.find("id").unwrap_or(&default);
-                                let attr = data_json.find("attributes").unwrap_or(&default);
-                                let links = data_json.find("links").unwrap_or(&default);
-                                let obj_type = data_json.find("type").unwrap_or(&default);
-
-                                Ok(Object::new(id, attr, links, obj_type))
+                                match data {
+                                    Some(data_value) => Object::from_json(data_value),
+                                    None => Err(IngestError::InvalidObjDataError),
+                                }
                             }
                             None => Err(IngestError::InvalidObjDataError),
                         }
@@ -121,7 +167,7 @@ impl Ref {
     }
 
     pub fn value(&self, property: &str) -> Option<&str> {
-        self.attributes.find(property).map_or(None, |type_value| type_value.as_string())
+        self.attributes.find(property).map_or(None, |type_value| type_value.as_str())
     }
 }
 
@@ -129,4 +175,18 @@ impl fmt::Display for Ref {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.attributes.fmt(f)
     }
+}
+
+fn and_list<T>(options: Vec<Option<T>>) -> Option<Vec<T>> {
+
+    let state = Some(Vec::new());
+
+    options.into_iter().fold(state, |result, option| {
+        result.and_then(|mut list| {
+            option.and_then(|value| {
+                list.push(value);
+                Some(list)
+            })
+        })
+    })
 }

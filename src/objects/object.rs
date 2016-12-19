@@ -1,8 +1,15 @@
-extern crate rustc_serialize;
+// extern crate rustc_serialize;
 extern crate mongodb;
 extern crate bson;
+extern crate serde;
+extern crate serde_json;
+extern crate time;
+extern crate chrono;
 
-use self::rustc_serialize::json::Json;
+// use self::rustc_serialize::json::Json;
+use self::chrono::DateTime;
+use self::chrono::UTC;
+use self::serde_json::Value as Json;
 use self::mongodb::db::{Database, ThreadedDatabase};
 use self::mongodb::coll::options::FindOneAndUpdateOptions;
 use self::bson::{Document, Bson};
@@ -12,8 +19,12 @@ use config;
 use types::ThreadedAPI;
 use objects::reference::Ref;
 use worker_pool::WorkerPool;
+use error::IngestResult;
+use error::IngestError;
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Object {
+    #[serde(rename = "_id")]
     pub id: Json,
     pub attributes: Json,
     pub links: Json,
@@ -21,24 +32,38 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn new(id: &Json, attributes: &Json, links: &Json, object_type: &Json) -> Object {
+    pub fn new(id: Json, attributes: Json, links: Json, object_type: Json) -> Object {
         Object {
-            id: id.clone(),
-            attributes: attributes.clone(),
-            links: links.clone(),
-            object_type: object_type.clone(),
+            id: id,
+            attributes: attributes,
+            links: links,
+            object_type: object_type,
         }
     }
 
-    pub fn from_json(json: &Json) -> Object {
-        let default = Json::from_str("{}").unwrap();
+    pub fn from_json(mut json: Json) -> IngestResult<Object> {
+        let mut json_map = json.as_object_mut();
 
-        let id = json.find("id").unwrap_or(&default);
-        let attributes = json.find("attributes").unwrap_or(&default);
-        let links = json.find("links").unwrap_or(&default);
-        let ref_type = json.find("type").unwrap_or(&default);
+        match json_map {
+            Some(map) => {
 
-        Object::new(id, attributes, links, ref_type)
+                let id = map.remove("id");
+                let attributes = map.remove("attributes");
+                let links = map.remove("links").unwrap_or(serde_json::from_str("{}").unwrap());
+                let obj_type = map.remove("type");
+
+                match and_list(vec![id, attributes, obj_type]) {
+                    Some(mut value_list) => {
+                        Ok(Object::new(value_list.remove(0),
+                                       value_list.remove(0),
+                                       links,
+                                       value_list.remove(0)))
+                    }
+                    None => Err(IngestError::InvalidObjDataError),
+                }
+            }
+            None => Err(IngestError::InvalidObjDataError),
+        }
     }
 
     // TODO: Handle the rest of the references
@@ -96,11 +121,11 @@ impl Object {
     }
 
     pub fn attribute(&self, property: &str) -> Option<&str> {
-        self.attributes.find(property).map_or(None, |type_value| type_value.as_string())
+        self.attributes.find(property).map_or(None, |type_value| type_value.as_str())
     }
 
     pub fn parent(&self) -> Option<Ref> {
-        vec![self.collection(),
+        vec![// self.collection(),
              self.episode(),
              self.franchise(),
              self.season(),
@@ -113,33 +138,67 @@ impl Object {
             })
     }
 
-    pub fn import(&self, api: &ThreadedAPI, db: &Database, import_refs: bool) {
+    pub fn import(&self,
+                  api: &ThreadedAPI,
+                  db: &Database,
+                  import_refs: bool,
+                  run_start_time: i64) {
         // TODO: Do database stuff
         println!("Import {} with id => {}", self.object_type, self.id);
-        let id_bson = Bson::from_json(&self.id);
-        let filter = doc! {
-            "_id" => id_bson
-        };
 
-        let coll = db.collection(self.object_type.as_string().unwrap());
-        let doc = self.as_document();
+        // Make sure that we can find a collection for the type
+        match self.object_type.as_str() {
+            Some(type_string) => {
 
-        let mut options = FindOneAndUpdateOptions::new();
-        options.upsert = true;
+                // Check the updated_at date to determine if the db needs to
+                // update this object
+                let updated_at_string =
+                    self.attributes.find("updated_at").unwrap().as_str().unwrap();
 
-        let res = coll.find_one_and_replace(filter, doc, Some(options));
+                // let updated_at_time = time::strptime(updated_at_string, "%Y-%m-%dT%H:%M:%SZ");
+                let updated_at_time = match updated_at_string.parse::<DateTime<UTC>>() {
+                    Ok(date) => date.timestamp(),
+                    Err(_) => 0,
+                };
 
-        if import_refs {
-            self.import_refs(api, db, import_refs);
+                if updated_at_time > run_start_time {
+                    // println!("do update");
+                    match self.as_document() {
+                        Ok(doc) => {
+                            let coll = db.collection(type_string);
+                            let id = self.id.as_str().unwrap();
+
+                            let filter = doc! {
+                                "_id" => id
+                            };
+
+                            let mut options = FindOneAndUpdateOptions::new();
+                            options.upsert = true;
+
+                            let res = coll.find_one_and_replace(filter, doc, Some(options));
+                        }
+                        Err(_) => (),
+                    };
+                }
+
+                if import_refs {
+                    self.import_refs(api, db, import_refs, run_start_time);
+                }
+            }
+            None => (),
         }
     }
 
-    fn import_refs(&self, api: &ThreadedAPI, db: &Database, import_refs: bool) {
+    fn import_refs(&self,
+                   api: &ThreadedAPI,
+                   db: &Database,
+                   import_refs: bool,
+                   run_start_time: i64) {
 
         let mut pool =
-            WorkerPool::new(config::pool_size_for(self.object_type.as_string().unwrap_or("")));
+            WorkerPool::new(config::pool_size_for(self.object_type.as_str().unwrap_or("")));
         let refs: Vec<Option<Vec<Ref>>> = vec![self.assets(),
-                                               self.collections(),
+                                               // self.collections(),
                                                self.episodes(),
                                                self.extras(),
                                                self.seasons(),
@@ -154,7 +213,7 @@ impl Object {
                         let shared_api = api.clone();
                         let shared_db = db.clone();
                         pool.add_worker(thread::spawn(move || {
-                            reference.import(&shared_api, &shared_db, import_refs);
+                            reference.import(&shared_api, &shared_db, import_refs, run_start_time);
                         }));
                     }
                 }
@@ -167,7 +226,7 @@ impl Object {
 
     fn reference(&self, ref_name: &str) -> Option<Ref> {
 
-        self.attributes.find(ref_name).map_or(None, |ref_data| Some(Ref::from_json(ref_data)))
+        self.attributes.find(ref_name).map_or(None, |ref_data| Ref::from_json(ref_data).ok())
     }
 
     fn references(&self, ref_name: &str) -> Option<Vec<Ref>> {
@@ -178,29 +237,43 @@ impl Object {
                 objects.as_array()
                     .map_or(None, |array| {
                         Some(array.into_iter()
-                            .map(|o| Ref::from_json(o))
+                            .filter_map(|o| Ref::from_json(o).ok())
                             .collect::<Vec<Ref>>())
                     })
             })
 
     }
 
-    fn as_bson(&self) -> Bson {
+    // fn as_bson(&self) -> Bson {
+    //
+    //     Bson::from_json(&self.attributes)
+    // }
 
-        Bson::from_json(&self.attributes)
-    }
+    fn as_document(&self) -> IngestResult<Document> {
 
-    fn as_document(&self) -> Document {
+        let bson_result = bson::to_bson(&self);
 
-        let mut doc = Document::new();
+        match bson_result {
+            Ok(serialized) => {
+                if let bson::Bson::Document(document) = serialized {
+                    Ok(document)
+                } else {
+                    Err(IngestError::General)
+                }
+            }
+            Err(err) => Err(IngestError::Serialize(err)),
+        }
 
-        doc.insert("_id", Bson::from_json(&self.id));
-        doc.insert("attributes", Bson::from_json(&self.attributes));
-        doc.insert("links", Bson::from_json(&self.links));
-        doc.insert("type", Bson::from_json(&self.object_type));
-        doc.insert("parent", Bson::from_json(&self.parent().unwrap().id));
 
-        doc
+        // let mut doc = Document::new();
+
+        // doc.insert("_id", Bson::from_json(&self.id));
+        // doc.insert("attributes", Bson::from_json(&self.attributes));
+        // doc.insert("links", Bson::from_json(&self.links));
+        // doc.insert("type", Bson::from_json(&self.object_type));
+        // doc.insert("parent", Bson::from_json(&self.parent().unwrap().id));
+
+        // doc
     }
 }
 
@@ -208,4 +281,18 @@ impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.attributes.fmt(f)
     }
+}
+
+fn and_list<T>(options: Vec<Option<T>>) -> Option<Vec<T>> {
+
+    let state = Some(Vec::new());
+
+    options.into_iter().fold(state, |result, option| {
+        result.and_then(|mut list| {
+            option.and_then(|value| {
+                list.push(value);
+                Some(list)
+            })
+        })
+    })
 }
