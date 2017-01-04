@@ -2,8 +2,8 @@
 /// Holds config values
 ///
 pub const DB_NAME: &'static str = "core_data_model";
-pub const DB_USERNAME: &'static str = "root";
-pub const DB_PASSWORD: &'static str = "root";
+pub const DB_USERNAME: &'static str = "tptdrupal";
+pub const DB_PASSWORD: &'static str = "^tpt5drupal7*";
 
 pub const MIN_RUNTIME_DELTA: i64 = 30;
 

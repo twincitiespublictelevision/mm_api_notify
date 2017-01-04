@@ -27,16 +27,14 @@ pub struct Object {
     #[serde(rename = "_id")]
     pub id: Json,
     pub attributes: Json,
-    pub links: Json,
     pub object_type: Json,
 }
 
 impl Object {
-    pub fn new(id: Json, attributes: Json, links: Json, object_type: Json) -> Object {
+    pub fn new(id: Json, attributes: Json, object_type: Json) -> Object {
         Object {
             id: id,
             attributes: attributes,
-            links: links,
             object_type: object_type,
         }
     }
@@ -49,14 +47,12 @@ impl Object {
 
                 let id = map.remove("id");
                 let attributes = map.remove("attributes");
-                let links = map.remove("links").unwrap_or(serde_json::from_str("{}").unwrap());
                 let obj_type = map.remove("type");
 
                 match and_list(vec![id, attributes, obj_type]) {
                     Some(mut value_list) => {
                         Ok(Object::new(value_list.remove(0),
                                        value_list.remove(0),
-                                       links,
                                        value_list.remove(0)))
                     }
                     None => Err(IngestError::InvalidObjDataError),
@@ -142,7 +138,9 @@ impl Object {
                   api: &ThreadedAPI,
                   db: &Database,
                   import_refs: bool,
-                  run_start_time: i64) {
+                  run_start_time: i64,
+                  path_from_root: Vec<String>) {
+
         // TODO: Do database stuff
         println!("Import {} with id => {}", self.object_type, self.id);
 
@@ -155,16 +153,18 @@ impl Object {
                 let updated_at_string =
                     self.attributes.find("updated_at").unwrap().as_str().unwrap();
 
-                // let updated_at_time = time::strptime(updated_at_string, "%Y-%m-%dT%H:%M:%SZ");
                 let updated_at_time = match updated_at_string.parse::<DateTime<UTC>>() {
                     Ok(date) => date.timestamp(),
                     Err(_) => 0,
                 };
 
                 if updated_at_time > run_start_time {
-                    // println!("do update");
                     match self.as_document() {
-                        Ok(doc) => {
+                        Ok(mut doc) => {
+
+                            // Insert the path from the root in the parents key
+                            doc.insert("parents", bson::to_bson(&path_from_root).unwrap());
+
                             let coll = db.collection(type_string);
                             let id = self.id.as_str().unwrap();
 
@@ -182,7 +182,7 @@ impl Object {
                 }
 
                 if import_refs {
-                    self.import_refs(api, db, import_refs, run_start_time);
+                    self.import_refs(api, db, import_refs, run_start_time, path_from_root);
                 }
             }
             None => (),
@@ -193,10 +193,14 @@ impl Object {
                    api: &ThreadedAPI,
                    db: &Database,
                    import_refs: bool,
-                   run_start_time: i64) {
+                   run_start_time: i64,
+                   mut path_from_root: Vec<String>) {
 
+        // Create the new thread pool of the appropriate size
         let mut pool =
             WorkerPool::new(config::pool_size_for(self.object_type.as_str().unwrap_or("")));
+
+        // Create a vector of optional reference vectors
         let refs: Vec<Option<Vec<Ref>>> = vec![self.assets(),
                                                // self.collections(),
                                                self.episodes(),
@@ -205,6 +209,9 @@ impl Object {
                                                self.shows(),
                                                self.specials()];
 
+        // Add the current object to the path from root
+        path_from_root.push(self.id.as_str().unwrap().to_string());
+
         for optional_refs in refs {
 
             match optional_refs {
@@ -212,8 +219,13 @@ impl Object {
                     for reference in ref_list {
                         let shared_api = api.clone();
                         let shared_db = db.clone();
+                        let path_for_thread = path_from_root.clone();
                         pool.add_worker(thread::spawn(move || {
-                            reference.import(&shared_api, &shared_db, import_refs, run_start_time);
+                            reference.import(&shared_api,
+                                             &shared_db,
+                                             import_refs,
+                                             run_start_time,
+                                             path_for_thread);
                         }));
                     }
                 }
@@ -244,16 +256,13 @@ impl Object {
 
     }
 
-    // fn as_bson(&self) -> Bson {
-    //
-    //     Bson::from_json(&self.attributes)
-    // }
+    fn as_bson(&self) -> bson::EncoderResult<Bson> {
+        bson::to_bson(&self)
+    }
 
     fn as_document(&self) -> IngestResult<Document> {
 
-        let bson_result = bson::to_bson(&self);
-
-        match bson_result {
+        match self.as_bson() {
             Ok(serialized) => {
                 if let bson::Bson::Document(document) = serialized {
                     Ok(document)
@@ -263,17 +272,6 @@ impl Object {
             }
             Err(err) => Err(IngestError::Serialize(err)),
         }
-
-
-        // let mut doc = Document::new();
-
-        // doc.insert("_id", Bson::from_json(&self.id));
-        // doc.insert("attributes", Bson::from_json(&self.attributes));
-        // doc.insert("links", Bson::from_json(&self.links));
-        // doc.insert("type", Bson::from_json(&self.object_type));
-        // doc.insert("parent", Bson::from_json(&self.parent().unwrap().id));
-
-        // doc
     }
 }
 
@@ -285,9 +283,7 @@ impl fmt::Display for Object {
 
 fn and_list<T>(options: Vec<Option<T>>) -> Option<Vec<T>> {
 
-    let state = Some(Vec::new());
-
-    options.into_iter().fold(state, |result, option| {
+    options.into_iter().fold(Some(Vec::new()), |result, option| {
         result.and_then(|mut list| {
             option.and_then(|value| {
                 list.push(value);

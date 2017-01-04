@@ -17,33 +17,28 @@ use objects::object::Object;
 pub struct Ref {
     pub id: Json,
     pub attributes: Json,
-    pub links: Json,
     pub ref_type: Json,
 }
 
 impl Ref {
-    pub fn new(id: &Json, attributes: &Json, links: &Json, ref_type: &Json) -> Ref {
+    pub fn new(id: &Json, attributes: &Json, ref_type: &Json) -> Ref {
         Ref {
             id: id.clone(),
             attributes: attributes.clone(),
-            links: links.clone(),
             ref_type: ref_type.clone(),
         }
     }
 
     pub fn from_json(json: &Json) -> IngestResult<Ref> {
-        let default = serde_json::from_str("{}").unwrap();
 
         let id = json.find("id");
         let attributes = json.find("attributes");
-        let links = json.find("links").unwrap_or(&default);
         let ref_type = json.find("type");
 
         match and_list(vec![id, attributes, ref_type]) {
             Some(mut value_list) => {
                 Ok(Ref::new(value_list.remove(0),
                             value_list.remove(0),
-                            links,
                             value_list.remove(0)))
             }
             None => Err(IngestError::InvalidDocumentDataError),
@@ -54,7 +49,8 @@ impl Ref {
                   api: &ThreadedAPI,
                   db: &Database,
                   import_refs: bool,
-                  run_start_time: i64) {
+                  run_start_time: i64,
+                  path_from_root: Vec<String>) {
 
         // Optimization: Asset types can not have child elements so if they are not going to be
         // updated, then do not perform a lookup
@@ -87,7 +83,7 @@ impl Ref {
         };
 
         match obj_lookup {
-            Some(Ok(obj)) => obj.import(api, db, import_refs, run_start_time),
+            Some(Ok(obj)) => obj.import(api, db, import_refs, run_start_time, path_from_root),
             Some(Err(_)) => (),
             None => (),
         };

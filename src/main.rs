@@ -41,7 +41,7 @@ fn main() {
     // Create a new API instance
     let api: ThreadedAPI = Arc::new(APIClient::new("", ""));
 
-    let mut import_start_time = UTC::now().timestamp();
+    let mut import_start_time = 0;
     let mut import_completion_time = UTC::now().timestamp();
     let mut next_run_time = 0;
 

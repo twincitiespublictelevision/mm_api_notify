@@ -78,7 +78,7 @@ pub fn run_show(show_identifier: &str,
     };
 
     match show {
-        Ok(show) => show.import(&api, &db, true, run_start_time),
+        Ok(show) => show.import(&api, &db, true, run_start_time, Vec::new()),
         Err(_) => (),
     };
 
@@ -99,7 +99,7 @@ fn run_show_page(page: usize, api: &ThreadedAPI, db: &Database, run_start_time: 
                 let shared_api = api.clone();
 
                 show_pool.add_worker(thread::spawn(move || {
-                    show.import(&shared_api, &shared_db, true, run_start_time);
+                    show.import(&shared_api, &shared_db, true, run_start_time, Vec::new());
                 }));
             }
 
