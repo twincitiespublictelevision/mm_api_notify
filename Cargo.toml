@@ -4,12 +4,12 @@ version = "0.1.0"
 authors = ["johnsonpaul1014 <pjohnson@tpt.org>"]
 
 [dependencies]
-core_data_client = { git = "ssh://git@github.com/twincitiespublictelevision/core_data_client.git" }
+core_data_client = { git = "ssh://git@github.com/twincitiespublictelevision/core_data_client.git", branch = "dev" }
 bson = "0.3.1"
 mongodb = "0.1.7"
 chan = "*"
 chan-signal = "0.1.6"
-hyper = "0.9.12"
+hyper = "0.10.0"
 url = "1.2.3"
 time = "0.1"
 rust-crypto = "0.2.36"

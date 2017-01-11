@@ -12,10 +12,12 @@ use config;
 use error::IngestError;
 use error::IngestResult;
 use objects::Object;
+use objects::Importable;
 use worker_pool::WorkerPool;
 use types::ThreadedAPI;
 use time::Duration;
 use self::serde_json::Value as Json;
+use core_data_client::Endpoints;
 
 pub fn run(api: &ThreadedAPI, db: &Database, run_start_time: i64) -> IngestResult<Duration> {
 
@@ -52,7 +54,7 @@ pub fn run_show(show_identifier: &str,
 
     let start_time = time::now();
 
-    let response = api.shows().get(show_identifier);
+    let response = api.get(Endpoints::Show, show_identifier);
 
     let show = match response {
         Ok(response_string) => {
@@ -78,7 +80,7 @@ pub fn run_show(show_identifier: &str,
     };
 
     match show {
-        Ok(show) => show.import(&api, &db, true, run_start_time, Vec::new()),
+        Ok(show) => show.import(&api, &db, true, run_start_time, &vec![]),
         Err(_) => (),
     };
 
@@ -99,7 +101,7 @@ fn run_show_page(page: usize, api: &ThreadedAPI, db: &Database, run_start_time: 
                 let shared_api = api.clone();
 
                 show_pool.add_worker(thread::spawn(move || {
-                    show.import(&shared_api, &shared_db, true, run_start_time, Vec::new());
+                    show.import(&shared_api, &shared_db, true, run_start_time, &vec![]);
                 }));
             }
 
@@ -193,7 +195,7 @@ fn get_number_of_pages(api: &ThreadedAPI) -> IngestResult<usize> {
 }
 
 fn get_list_doc(page: usize, api: &ThreadedAPI) -> IngestResult<Json> {
-    let response = api.shows().list(page);
+    let response = api.list(Endpoints::Show, vec![("page", page.to_string().as_str())]);
 
     match response {
         Ok(response_string) => {

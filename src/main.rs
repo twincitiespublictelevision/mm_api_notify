@@ -11,7 +11,6 @@ extern crate serde_derive;
 extern crate serde_json;
 extern crate chrono;
 
-use self::chrono::DateTime;
 use self::chrono::UTC;
 mod config;
 mod error;
@@ -46,7 +45,7 @@ fn main() {
     let mut next_run_time = 0;
 
     println!("Start run");
-    while true {
+    loop {
 
         if UTC::now().timestamp() > next_run_time {
             let label = if next_run_time == 0 {

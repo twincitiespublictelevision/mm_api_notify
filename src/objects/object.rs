@@ -21,8 +21,9 @@ use objects::reference::Ref;
 use worker_pool::WorkerPool;
 use error::IngestResult;
 use error::IngestError;
+use objects::import::Importable;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Object {
     #[serde(rename = "_id")]
     pub id: Json,
@@ -40,7 +41,7 @@ impl Object {
     }
 
     pub fn from_json(mut json: Json) -> IngestResult<Object> {
-        let mut json_map = json.as_object_mut();
+        let json_map = json.as_object_mut();
 
         match json_map {
             Some(map) => {
@@ -134,12 +135,104 @@ impl Object {
             })
     }
 
-    pub fn import(&self,
-                  api: &ThreadedAPI,
-                  db: &Database,
-                  import_refs: bool,
-                  run_start_time: i64,
-                  path_from_root: Vec<String>) {
+    fn import_refs(&self,
+                   api: &ThreadedAPI,
+                   db: &Database,
+                   import_refs: bool,
+                   run_start_time: i64,
+                   path_from_root: &Vec<String>) {
+
+        // Create the new thread pool of the appropriate size
+        let mut pool =
+            WorkerPool::new(config::pool_size_for(self.object_type.as_str().unwrap_or("")));
+
+        // Create a vector of optional reference vectors
+        let refs: Vec<Option<Vec<Ref>>> = vec![self.assets(),
+                                               // self.collections(),
+                                               self.episodes(),
+                                               self.extras(),
+                                               self.seasons(),
+                                               self.shows(),
+                                               self.specials()];
+
+        // Add the current object to the path from root
+        let mut path = path_from_root.clone();
+        path.push(self.id.as_str().unwrap().to_string());
+
+        for optional_refs in refs {
+
+            match optional_refs {
+                Some(ref_list) => {
+                    for reference in ref_list {
+                        let shared_api = api.clone();
+                        let shared_db = db.clone();
+                        let path_for_thread = path.clone();
+                        pool.add_worker(thread::spawn(move || {
+                            reference.import(&shared_api,
+                                             &shared_db,
+                                             import_refs,
+                                             run_start_time,
+                                             &path_for_thread);
+                        }));
+                    }
+                }
+                None => (),
+            }
+        }
+
+        pool.wait_for_workers();
+    }
+
+    fn reference(&self, ref_name: &str) -> Option<Ref> {
+
+        self.attributes
+            .find(ref_name)
+            .cloned()
+            .map_or(None, |ref_data| Ref::from_json(ref_data).ok())
+    }
+
+    fn references(&self, ref_name: &str) -> Option<Vec<Ref>> {
+
+        self.attributes
+            .find(ref_name)
+            .map_or(None, |objects| {
+                objects.as_array()
+                    .map_or(None, |array| {
+                        Some(array.into_iter()
+                            .cloned()
+                            .filter_map(|o| Ref::from_json(o).ok())
+                            .collect::<Vec<Ref>>())
+                    })
+            })
+
+    }
+
+    fn as_bson(&self) -> bson::EncoderResult<Bson> {
+        bson::to_bson(&self)
+    }
+
+    fn as_document(&self) -> IngestResult<Document> {
+
+        match self.as_bson() {
+            Ok(serialized) => {
+                if let bson::Bson::Document(document) = serialized {
+                    Ok(document)
+                } else {
+                    Err(IngestError::General)
+                }
+            }
+            Err(err) => Err(IngestError::Serialize(err)),
+        }
+    }
+}
+
+impl Importable for Object {
+    fn import(&self,
+              api: &ThreadedAPI,
+              db: &Database,
+              import_refs: bool,
+              run_start_time: i64,
+              path_from_root: &Vec<String>) {
 
         // TODO: Do database stuff
         println!("Import {} with id => {}", self.object_type, self.id);
@@ -163,7 +256,7 @@ impl Object {
                         Ok(mut doc) => {
 
                             // Insert the path from the root in the parents key
-                            doc.insert("parents", bson::to_bson(&path_from_root).unwrap());
+                            doc.insert("parents", bson::to_bson(path_from_root).unwrap());
 
                             let coll = db.collection(type_string);
                             let id = self.id.as_str().unwrap();
@@ -186,91 +279,6 @@ impl Object {
                 }
             }
             None => (),
-        }
-    }
-
-    fn import_refs(&self,
-                   api: &ThreadedAPI,
-                   db: &Database,
-                   import_refs: bool,
-                   run_start_time: i64,
-                   mut path_from_root: Vec<String>) {
-
-        // Create the new thread pool of the appropriate size
-        let mut pool =
-            WorkerPool::new(config::pool_size_for(self.object_type.as_str().unwrap_or("")));
-
-        // Create a vector of optional reference vectors
-        let refs: Vec<Option<Vec<Ref>>> = vec![self.assets(),
-                                               // self.collections(),
-                                               self.episodes(),
-                                               self.extras(),
-                                               self.seasons(),
-                                               self.shows(),
-                                               self.specials()];
-
-        // Add the current object to the path from root
-        path_from_root.push(self.id.as_str().unwrap().to_string());
-
-        for optional_refs in refs {
-
-            match optional_refs {
-                Some(ref_list) => {
-                    for reference in ref_list {
-                        let shared_api = api.clone();
-                        let shared_db = db.clone();
-                        let path_for_thread = path_from_root.clone();
-                        pool.add_worker(thread::spawn(move || {
-                            reference.import(&shared_api,
-                                             &shared_db,
-                                             import_refs,
-                                             run_start_time,
-                                             path_for_thread);
-                        }));
-                    }
-                }
-                None => (),
-            }
-        }
-
-        pool.wait_for_workers();
-    }
-
-    fn reference(&self, ref_name: &str) -> Option<Ref> {
-
-        self.attributes.find(ref_name).map_or(None, |ref_data| Ref::from_json(ref_data).ok())
-    }
-
-    fn references(&self, ref_name: &str) -> Option<Vec<Ref>> {
-
-        self.attributes
-            .find(ref_name)
-            .map_or(None, |objects| {
-                objects.as_array()
-                    .map_or(None, |array| {
-                        Some(array.into_iter()
-                            .filter_map(|o| Ref::from_json(o).ok())
-                            .collect::<Vec<Ref>>())
-                    })
-            })
-
-    }
-
-    fn as_bson(&self) -> bson::EncoderResult<Bson> {
-        bson::to_bson(&self)
-    }
-
-    fn as_document(&self) -> IngestResult<Document> {
-
-        match self.as_bson() {
-            Ok(serialized) => {
-                if let bson::Bson::Document(document) = serialized {
-                    Ok(document)
-                } else {
-                    Err(IngestError::General)
-                }
-            }
-            Err(err) => Err(IngestError::Serialize(err)),
         }
     }
 }

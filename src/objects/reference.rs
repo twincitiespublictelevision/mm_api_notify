@@ -6,14 +6,17 @@ extern crate chrono;
 use self::chrono::DateTime;
 use self::chrono::UTC;
 use self::serde_json::Value as Json;
-use self::serde_json::error::Result as JsonResult;
-use self::mongodb::db::{Database, ThreadedDatabase};
+use self::mongodb::db::Database;
 use std::fmt;
 use types::ThreadedAPI;
 use error::IngestResult;
 use error::IngestError;
 use objects::object::Object;
+use objects::parser::parse_response;
+use core_data_client::Endpoints;
+use objects::import::Importable;
 
+#[derive(Debug, PartialEq)]
 pub struct Ref {
     pub id: Json,
     pub attributes: Json,
@@ -21,36 +24,88 @@ pub struct Ref {
 }
 
 impl Ref {
-    pub fn new(id: &Json, attributes: &Json, ref_type: &Json) -> Ref {
+    pub fn new(id: Json, attributes: Json, ref_type: Json) -> Ref {
         Ref {
-            id: id.clone(),
-            attributes: attributes.clone(),
-            ref_type: ref_type.clone(),
+            id: id,
+            attributes: attributes,
+            ref_type: ref_type,
         }
     }
+    pub fn from_json(mut json: Json) -> IngestResult<Ref> {
+        let json_map = json.as_object_mut();
 
-    pub fn from_json(json: &Json) -> IngestResult<Ref> {
+        match json_map {
+            Some(map) => {
 
-        let id = json.find("id");
-        let attributes = json.find("attributes");
-        let ref_type = json.find("type");
+                let id = map.remove("id");
+                let attributes = map.remove("attributes");
+                let ref_type = map.remove("type");
 
-        match and_list(vec![id, attributes, ref_type]) {
-            Some(mut value_list) => {
-                Ok(Ref::new(value_list.remove(0),
-                            value_list.remove(0),
-                            value_list.remove(0)))
+                match and_list(vec![id, attributes, ref_type]) {
+                    Some(mut value_list) => {
+                        Ok(Ref::new(value_list.remove(0),
+                                    value_list.remove(0),
+                                    value_list.remove(0)))
+                    }
+                    None => Err(IngestError::InvalidRefDataError),
+                }
             }
-            None => Err(IngestError::InvalidDocumentDataError),
+            None => Err(IngestError::InvalidRefDataError),
         }
     }
 
-    pub fn import(&self,
-                  api: &ThreadedAPI,
-                  db: &Database,
-                  import_refs: bool,
-                  run_start_time: i64,
-                  path_from_root: Vec<String>) {
+    pub fn to_object(&self, api: &ThreadedAPI) -> IngestResult<Object> {
+        let object_type = self.ref_type.as_str().unwrap_or("");
+        let object_id = self.id.as_str().unwrap_or("");
+
+        if object_id == "" {
+            return Err(IngestError::InvalidRefDataError);
+        }
+
+        let response = match object_type {
+            "asset" => Ok(api.get(Endpoints::Asset, object_id)),
+            "collection" => Ok(api.get(Endpoints::Collection, object_id)),
+            "episode" => Ok(api.get(Endpoints::Episode, object_id)),
+            "franchise" => Ok(api.get(Endpoints::Franchise, object_id)),
+            "season" => Ok(api.get(Endpoints::Season, object_id)),
+            "show" => Ok(api.get(Endpoints::Show, object_id)),
+            "special" => Ok(api.get(Endpoints::Special, object_id)),
+            _ => Err(IngestError::InvalidRefDataError),
+        };
+
+        response.and_then(|resp| {
+            parse_response(resp).and_then(|mut json| {
+                let json_map = json.as_object_mut();
+
+                match json_map {
+                    Some(map) => {
+                        let data = map.remove("data");
+
+                        match data {
+                            Some(data_value) => Object::from_json(data_value),
+                            None => Err(IngestError::InvalidObjDataError),
+                        }
+                    }
+                    None => Err(IngestError::InvalidObjDataError),
+                }
+            })
+        })
+    }
+
+    pub fn value(&self, property: &str) -> Option<&str> {
+        self.attributes.find(property).map_or(None, |type_value| type_value.as_str())
+    }
+}
+
+impl Importable for Ref {
+    // TODO: Refactor path_from_root to be a reference that is cloned
+    // on mutation. Likely needs to be place in an ARC
+    fn import(&self,
+              api: &ThreadedAPI,
+              db: &Database,
+              import_refs: bool,
+              run_start_time: i64,
+              path_from_root: &Vec<String>) {
 
         // Optimization: Asset types can not have child elements so if they are not going to be
         // updated, then do not perform a lookup
@@ -87,83 +142,6 @@ impl Ref {
             Some(Err(_)) => (),
             None => (),
         };
-    }
-
-    pub fn to_object(&self, api: &ThreadedAPI) -> IngestResult<Object> {
-        let object_type = self.ref_type.as_str().unwrap_or("");
-        let object_id = self.id.as_str().unwrap_or("");
-
-        if object_id == "" {
-            return Err(IngestError::InvalidRefDataError);
-        }
-
-        let response = match object_type {
-            "asset" => {
-                api.assets()
-                    .get(object_id)
-                    .map_err(IngestError::API)
-            }
-            "collection" => {
-                api.collections()
-                    .get(object_id)
-                    .map_err(IngestError::API)
-            }
-            "episode" => {
-                api.episodes()
-                    .get(object_id)
-                    .map_err(IngestError::API)
-            }
-            "franchise" => {
-                api.franchises()
-                    .get(object_id)
-                    .map_err(IngestError::API)
-            }
-            "season" => {
-                api.seasons()
-                    .get(object_id)
-                    .map_err(IngestError::API)
-            }
-            "show" => {
-                api.shows()
-                    .get(object_id)
-                    .map_err(IngestError::API)
-            }
-            "special" => {
-                api.specials()
-                    .get(object_id)
-                    .map_err(IngestError::API)
-            }
-            _ => Err(IngestError::InvalidRefDataError),
-        };
-
-        match response {
-            Ok(json_string) => {
-                let full_json: JsonResult<Json> = serde_json::from_str(json_string.as_str());
-                match full_json {
-                    Ok(mut json) => {
-                        let json_map = json.as_object_mut();
-
-                        match json_map {
-                            Some(map) => {
-                                let data = map.remove("data");
-
-                                match data {
-                                    Some(data_value) => Object::from_json(data_value),
-                                    None => Err(IngestError::InvalidObjDataError),
-                                }
-                            }
-                            None => Err(IngestError::InvalidObjDataError),
-                        }
-                    }
-                    Err(err) => Err(IngestError::Parse(err)),
-                }
-            }
-            Err(err) => Err(err),
-        }
-    }
-
-    pub fn value(&self, property: &str) -> Option<&str> {
-        self.attributes.find(property).map_or(None, |type_value| type_value.as_str())
     }
 }
 
