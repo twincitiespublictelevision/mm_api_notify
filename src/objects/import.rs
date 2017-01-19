@@ -1,16 +1,23 @@
 extern crate mongodb;
+extern crate serde_json;
 
-use self::mongodb::db::Database;
+use self::mongodb::db::{Database, ThreadedDatabase};
+use self::serde_json::Value as Json;
+
+use error::IngestResult;
 use types::ThreadedAPI;
 
 pub trait Importable {
+    type Value;
+
     // TODO: Refactor path_from_root to be a reference that is cloned
     // on mutation. Likely needs to be place in an ARC
     fn import(&self,
               api: &ThreadedAPI,
               db: &Database,
-              import_refs: bool,
-              run_start_time: i64,
-              path_from_root: &Vec<String>)
+              follow_refs: bool,
+              path_from_root: &Vec<&str>,
+              since: i64)
               -> ();
+    fn from_json(json: &Json) -> IngestResult<Self::Value>;
 }

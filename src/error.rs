@@ -19,7 +19,6 @@ pub enum IngestError {
     InvalidDocumentDataError,
     InvalidObjDataError,
     InvalidRefDataError,
-    General,
 }
 
 impl fmt::Display for IngestError {
@@ -31,7 +30,6 @@ impl fmt::Display for IngestError {
             IngestError::InvalidDocumentDataError => write!(f, ""),
             IngestError::InvalidObjDataError => write!(f, ""),
             IngestError::InvalidRefDataError => write!(f, ""),
-            IngestError::General => write!(f, ""),
         }
     }
 }
@@ -45,7 +43,6 @@ impl Error for IngestError {
             IngestError::InvalidDocumentDataError => "",
             IngestError::InvalidObjDataError => "",
             IngestError::InvalidRefDataError => "",
-            IngestError::General => "",
         }
     }
 
@@ -57,7 +54,6 @@ impl Error for IngestError {
             IngestError::InvalidDocumentDataError => None,
             IngestError::InvalidObjDataError => None,
             IngestError::InvalidRefDataError => None,
-            IngestError::General => None,
         }
     }
 }
