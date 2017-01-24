@@ -1,24 +1,28 @@
 [package]
+authors = ["johnsonpaul1014 <pjohnson@tpt.org>"]
 name = "video_ingest"
 version = "0.1.0"
-authors = ["johnsonpaul1014 <pjohnson@tpt.org>"]
 
 [dependencies]
-core_data_client = { git = "ssh://git@github.com/twincitiespublictelevision/core_data_client.git", branch = "dev" }
 bson = "0.3.1"
-mongodb = "0.1.7"
 chan = "*"
 chan-signal = "0.1.6"
+chrono = "0.2"
+clap = "2.20.0"
+futures = "0.1.8"
 hyper = "0.10.0"
-url = "1.2.3"
-time = "0.1"
+mongodb = "=0.1.8"
+rand = "0.3"
+rayon = "0.6.0"
 rust-crypto = "0.2.36"
 rustc-serialize = "0.3"
-rand = "0.3"
 serde = "0.8"
 serde_derive = "0.8"
 serde_json = "0.8"
-chrono = "0.2"
+time = "0.1"
 tokio-core = "0.1.3"
-futures = "0.1.8"
-rayon = "0.6.0"
+url = "1.2.3"
+
+[dependencies.core_data_client]
+branch = "dev"
+git = "ssh://git@github.com/twincitiespublictelevision/core_data_client.git"

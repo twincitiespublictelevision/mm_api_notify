@@ -100,7 +100,9 @@ impl Importable for Object {
               path_from_root: &Vec<&str>,
               since: i64) {
 
-        println!("Import {}", &self);
+        println!("Import {} {}",
+                 self.id,
+                 self.attributes.lookup("title").unwrap().as_str().unwrap());
 
         // Check the updated_at date to determine if the db needs to
         // update this object
@@ -116,7 +118,7 @@ impl Importable for Object {
                 Ok(mut doc) => {
 
                     // Insert the path from the root in the parents key
-                    doc.insert("parents", bson::to_bson(path_from_root).unwrap());
+                    // doc.insert("parents", bson::to_bson(path_from_root).unwrap());
 
                     let coll = db.collection(self.object_type.as_str());
                     let id = self.id.as_str();
@@ -141,18 +143,23 @@ impl Importable for Object {
 
     fn from_json(json: &Json) -> IngestResult<Object> {
 
-        json.clone()
-            .as_object_mut()
+        let mut source = json.clone();
+
+        let id = source.lookup("data").and_then(|data| {
+            data.lookup("id")
+                .and_then(|id| id.as_str().and_then(|id_str| Some(id_str.to_string())))
+        });
+
+        let obj_type = source.lookup("data").and_then(|data| {
+            data.lookup("type")
+                .and_then(|o_type| o_type.as_str().and_then(|type_str| Some(type_str.to_string())))
+        });
+
+        source.as_object_mut()
             .and_then(|map| {
-                let id = map.remove("id")
-                    .and_then(|id_val| id_val.as_str().and_then(|id_str| Some(id_str.to_string())));
 
-                let attrs = map.remove("data").and_then(|mut data_val| {
-                    data_val.as_object_mut().and_then(|data_map| data_map.remove("attributes"))
-                });
-
-                let obj_type = map.remove("type").and_then(|type_val| {
-                    type_val.as_str().and_then(|type_str| Some(type_str.to_string()))
+                let attrs = map.remove("data").and_then(|mut data| {
+                    data.as_object_mut().and_then(|data_map| data_map.remove("attributes"))
                 });
 
                 let links = map.remove("links");
