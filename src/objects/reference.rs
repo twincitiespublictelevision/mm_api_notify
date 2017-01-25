@@ -3,7 +3,6 @@ extern crate mongodb;
 extern crate serde;
 extern crate serde_json;
 
-use self::chrono::{DateTime, UTC};
 use self::mongodb::db::{Database, ThreadedDatabase};
 use self::serde_json::Value as Json;
 
@@ -22,22 +21,38 @@ pub struct Ref {
     pub attributes: Json,
     pub ref_type: String,
     pub self_url: String,
-    pub updated_at: i64,
 }
 
 impl Ref {
-    pub fn new(id: String,
-               attributes: Json,
-               ref_type: String,
-               self_url: String,
-               updated_at: i64)
-               -> Ref {
+    pub fn new(id: String, attributes: Json, ref_type: String, self_url: String) -> Ref {
         Ref {
             id: id,
             attributes: attributes,
             ref_type: ref_type,
             self_url: self_url,
-            updated_at: updated_at,
+        }
+    }
+
+    fn import_general(&self,
+                      api: &ThreadedAPI,
+                      db: &Database,
+                      follow_refs: bool,
+                      path_from_root: &Vec<&str>,
+                      since: i64) {
+
+        let res = utils::parse_response(api.url(self.self_url.as_str()))
+            .and_then(|json| Object::from_json(&json))
+            .and_then(|obj| Ok(obj.import(api, db, follow_refs, path_from_root, since)));
+
+        if res.is_err() {
+            println!("Skipping {} {} due to {:?}", self.ref_type, self.id, res);
+        }
+    }
+
+    fn import_changelog(&self, api: &ThreadedAPI, db: &Database, action: &str) {
+        match action {
+            "delete" => (/* TODO: Perform deletion */),
+            _ => self.import_general(api, db, false, &vec![], 0),
         }
     }
 }
@@ -51,9 +66,15 @@ impl Importable for Ref {
               follow_refs: bool,
               path_from_root: &Vec<&str>,
               since: i64) {
-        utils::parse_response(api.url(self.self_url.as_str()))
-            .and_then(|json| Object::from_json(&json))
-            .and_then(|obj| Ok(obj.import(api, db, follow_refs, path_from_root, since)));
+
+        // When importing a reference we branch based on an inspection of the attributes. If this
+        // a changelog reference then we prefer to use a custom import.
+        let action = self.attributes.lookup("action").and_then(|action| action.as_str());
+
+        match action {
+            Some(api_action) => self.import_changelog(api, db, api_action),
+            None => self.import_general(api, db, follow_refs, path_from_root, since),
+        }
     }
 
     fn from_json(json: &Json) -> IngestResult<Ref> {
@@ -81,17 +102,15 @@ impl Importable for Ref {
                             })
                     });
 
-                let updated_at = attributes.and_then(|attrs| {
-                    attrs.find("updated_at")
-                        .and_then(|updated_at_val| updated_at_val.as_str())
-                        .and_then(|updated_at_str| updated_at_str.parse::<DateTime<UTC>>().ok())
-                        .and_then(|updated_at_utc| Some(updated_at_utc.timestamp()))
-                });
+                // let updated_at = attributes.and_then(|attrs| {
+                //     attrs.find("updated_at")
+                //         .and_then(|updated_at_val| updated_at_val.as_str())
+                //         .and_then(|updated_at_str| updated_at_str.parse::<DateTime<UTC>>().ok())
+                //         .and_then(|updated_at_utc| Some(updated_at_utc.timestamp()))
+                // });
 
-                match (id, attrs, ref_type, self_url, updated_at) {
-                    (Some(p1), Some(p2), Some(p3), Some(p4), Some(p5)) => {
-                        Some(Ref::new(p1, p2, p3, p4, p5))
-                    }
+                match (id, attrs, ref_type, self_url) {
+                    (Some(p1), Some(p2), Some(p3), Some(p4)) => Some(Ref::new(p1, p2, p3, p4)),
                     _ => None,
                 }
             })

@@ -54,7 +54,13 @@ impl Collection {
     }
 
     fn get_collection(&self, api: &ThreadedAPI, url: &str) -> IngestResult<Collection> {
-        utils::parse_response(api.url(url)).and_then(|json| Collection::from_json(&json))
+        match utils::parse_response(api.url(url)).and_then(|json| Collection::from_json(&json)) {
+            Ok(coll) => Ok(coll),
+            Err(err) => {
+                println!("Collection {} failed due to {}", url, err);
+                Err(err)
+            }
+        }
     }
 
     fn import_page(&self,

@@ -115,7 +115,7 @@ impl Importable for Object {
 
         if updated_at_time > since {
             match self.as_document() {
-                Ok(mut doc) => {
+                Ok(doc) => {
 
                     // Insert the path from the root in the parents key
                     // doc.insert("parents", bson::to_bson(path_from_root).unwrap());

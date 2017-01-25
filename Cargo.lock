@@ -168,7 +168,7 @@ dependencies = [
 [[package]]
 name = "core_data_client"
 version = "0.4.0"
-source = "git+ssh://git@github.com/twincitiespublictelevision/core_data_client.git?branch=dev#9bff2584971a2eab94685ba1b7c29f2d9ef9e864"
+source = "git+ssh://git@github.com/twincitiespublictelevision/core_data_client.git?branch=dev#e48c9303b4ca40e735f145a8254659aae996b5ac"
 dependencies = [
  "reqwest 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
