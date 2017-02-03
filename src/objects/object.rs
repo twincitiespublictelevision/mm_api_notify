@@ -21,6 +21,7 @@ use error::IngestError;
 use objects::collection::Collection;
 use objects::import::Importable;
 use objects::utils;
+use types::ImportResult;
 use types::ThreadedAPI;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -47,18 +48,20 @@ impl Object {
                        db: &Database,
                        follow_refs: bool,
                        path_from_root: &Vec<&str>,
-                       since: i64) {
+                       since: i64)
+                       -> ImportResult {
 
         let mut path_for_children = path_from_root.clone();
         path_for_children.push(self.id.as_str());
 
         vec!["assets", "episodes", "extras", "seasons", "shows", "specials"]
             .par_iter()
-            .for_each(|child_type| {
+            .map(|child_type| {
                 self.child_collection(api, child_type).and_then(|child_collection| {
                     Some(child_collection.import(api, db, follow_refs, &path_for_children, since))
-                });
-            });
+                }).unwrap_or((0, 1))
+            })
+            .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2))
     }
 
     fn child_collection(&self, api: &ThreadedAPI, child_type: &str) -> Option<Collection> {
@@ -72,7 +75,7 @@ impl Object {
     }
 
     fn as_bson(&self) -> bson::EncoderResult<Bson> {
-        bson::to_bson(&self)
+        bson::to_bson(&self).map(utils::map_string_to_bson_dates)
     }
 
     fn as_document(&self) -> IngestResult<Document> {
@@ -98,7 +101,8 @@ impl Importable for Object {
               db: &Database,
               follow_refs: bool,
               path_from_root: &Vec<&str>,
-              since: i64) {
+              since: i64)
+              -> ImportResult {
 
         println!("Import {} {}",
                  self.id,
@@ -113,7 +117,7 @@ impl Importable for Object {
             .and_then(|date| Some(date.timestamp()))
             .unwrap_or(0);
 
-        if updated_at_time > since {
+        let update_result = if updated_at_time > since {
             match self.as_document() {
                 Ok(doc) => {
 
@@ -130,15 +134,24 @@ impl Importable for Object {
                     let mut options = FindOneAndUpdateOptions::new();
                     options.upsert = true;
 
-                    let res = coll.find_one_and_replace(filter, doc, Some(options));
+                    match coll.find_one_and_replace(filter, doc, Some(options)) {
+                        Ok(_) => (1, 0),
+                        Err(_) => (0, 1),
+                    }
+
+
                 }
-                Err(_) => (),
-            };
-        }
+                Err(_) => (0, 1),
+            }
+        } else {
+            (0, 0)
+        };
 
         if follow_refs {
             self.import_children(api, db, follow_refs, path_from_root, since);
-        }
+        };
+
+        update_result
     }
 
     fn from_json(json: &Json) -> IngestResult<Object> {

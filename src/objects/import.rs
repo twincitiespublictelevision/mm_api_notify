@@ -5,6 +5,7 @@ use self::mongodb::db::{Database, ThreadedDatabase};
 use self::serde_json::Value as Json;
 
 use error::IngestResult;
+use types::ImportResult;
 use types::ThreadedAPI;
 
 pub trait Importable {
@@ -18,6 +19,6 @@ pub trait Importable {
               follow_refs: bool,
               path_from_root: &Vec<&str>,
               since: i64)
-              -> ();
+              -> ImportResult;
     fn from_json(json: &Json) -> IngestResult<Self::Value>;
 }

@@ -1,4 +1,4 @@
-extern crate core_data_client;
+extern crate mm_client;
 extern crate serde_json;
 extern crate bson;
 
@@ -7,13 +7,13 @@ use std::result::Result;
 use std::fmt;
 use self::serde_json::error::Error as ParserError;
 use self::bson::EncoderError;
-use self::core_data_client::CDCError;
+use self::mm_client::MMCError;
 
 pub type IngestResult<T> = Result<T, IngestError>;
 
 #[derive(Debug)]
 pub enum IngestError {
-    API(CDCError),
+    API(MMCError),
     Parse(ParserError),
     Serialize(EncoderError),
     InvalidDocumentDataError,
@@ -58,8 +58,8 @@ impl Error for IngestError {
     }
 }
 
-impl From<CDCError> for IngestError {
-    fn from(err: CDCError) -> IngestError {
+impl From<MMCError> for IngestError {
+    fn from(err: MMCError) -> IngestError {
         IngestError::API(err)
     }
 }

@@ -10,12 +10,13 @@ use self::serde_json::Value as Json;
 use std::cmp::PartialEq;
 use std::fmt;
 
-use types::ThreadedAPI;
 use error::IngestResult;
 use error::IngestError;
 use objects::import::Importable;
 use objects::reference::Ref;
 use objects::utils;
+use types::ImportResult;
+use types::ThreadedAPI;
 
 #[derive(Debug, PartialEq)]
 pub struct Collection {
@@ -35,24 +36,6 @@ impl Collection {
         }
     }
 
-    pub fn page(&self) -> &Vec<Ref> {
-        &self.page
-    }
-
-    pub fn prev_page(&self, api: &ThreadedAPI) -> Option<Collection> {
-        match self.links.find("next") {
-            Some(&Json::String(ref next_url)) => self.get_collection(api, next_url.as_str()).ok(),
-            _ => None,
-        }
-    }
-
-    pub fn next_page(&self, api: &ThreadedAPI) -> Option<Collection> {
-        match self.links.find("prev") {
-            Some(&Json::String(ref prev_url)) => self.get_collection(api, prev_url.as_str()).ok(),
-            _ => None,
-        }
-    }
-
     fn get_collection(&self, api: &ThreadedAPI, url: &str) -> IngestResult<Collection> {
         match utils::parse_response(api.url(url)).and_then(|json| Collection::from_json(&json)) {
             Ok(coll) => Ok(coll),
@@ -68,10 +51,12 @@ impl Collection {
                    db: &Database,
                    follow_refs: bool,
                    path_from_root: &Vec<&str>,
-                   since: i64) {
-        &self.page
+                   since: i64)
+                   -> ImportResult {
+        self.page
             .par_iter()
-            .for_each(|item| item.import(api, db, follow_refs, path_from_root, since));
+            .map(|item| item.import(api, db, follow_refs, path_from_root, since))
+            .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2))
     }
 }
 
@@ -83,7 +68,8 @@ impl Importable for Collection {
               db: &Database,
               follow_refs: bool,
               path_from_root: &Vec<&str>,
-              since: i64) {
+              since: i64)
+              -> ImportResult {
 
         let num_pages = (self.total as f64 / self.page_size as f64).ceil() as usize + 1;
 
@@ -91,20 +77,25 @@ impl Importable for Collection {
             .lookup("first")
             .and_then(|first_url| {
                 first_url.as_str().and_then(|base_url| {
-                    Some((1..num_pages).collect::<Vec<usize>>().par_iter().for_each(|page_num| {
-                        let mut page_url = String::new();
-                        page_url.push_str(base_url);
-                        page_url.push(if base_url.contains("?") { '&' } else { '?' });
-                        page_url.push_str("page=");
-                        page_url.push_str(page_num.to_string().as_str());
+                    Some((1..num_pages)
+                        .collect::<Vec<usize>>()
+                        .par_iter()
+                        .map(|page_num| {
+                            let mut page_url = String::new();
+                            page_url.push_str(base_url);
+                            page_url.push(if base_url.contains("?") { '&' } else { '?' });
+                            page_url.push_str("page=");
+                            page_url.push_str(page_num.to_string().as_str());
 
-                        self.get_collection(api, page_url.as_str()).and_then(|collection| {
-                            Ok(collection.import_page(api, db, follow_refs, path_from_root, since))
-                        });
-                    }))
+                            self.get_collection(api, page_url.as_str()).and_then(|collection| {
+                                Ok(collection.import_page(api, db, follow_refs, path_from_root, since))
+                            }).unwrap_or((0, 1))
+                        })
+                        .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2)))
                 })
             })
-            .or_else(|| Some(self.import_page(api, db, follow_refs, path_from_root, since)));
+            .or_else(|| Some(self.import_page(api, db, follow_refs, path_from_root, since)))
+            .unwrap_or((0, 1))
     }
 
     fn from_json(json: &Json) -> IngestResult<Collection> {

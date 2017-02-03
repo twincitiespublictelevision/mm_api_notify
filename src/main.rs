@@ -2,7 +2,7 @@
 extern crate bson;
 extern crate chrono;
 extern crate clap;
-extern crate core_data_client;
+extern crate mm_client;
 extern crate mongodb;
 extern crate rayon;
 extern crate serde;
@@ -16,19 +16,21 @@ mod objects;
 mod types;
 
 use clap::{Arg, App};
-use chrono::{NaiveDateTime, Duration, UTC};
-use core_data_client::Client as APIClient;
-use core_data_client::CDCResult;
+use chrono::{DateTime, Duration, NaiveDateTime, TimeZone, UTC};
+use mm_client::Client as APIClient;
+use mm_client::MMCResult;
 use mongodb::{Client, ThreadedClient};
 use mongodb::db::{Database, ThreadedDatabase};
+use mongodb::coll::options::FindOptions;
 use serde_json::error::Result as JsonResult;
 use serde_json::Value as Json;
 
 use std::sync::Arc;
 
+use error::{IngestError, IngestResult};
 use objects::Collection;
 use objects::Importable;
-use error::{IngestError, IngestResult};
+use types::RunResult;
 use types::ThreadedAPI;
 
 
@@ -53,7 +55,13 @@ fn main() {
         .get_matches();
 
     // Initialize the thread pools
-    rayon::initialize(rayon::Configuration::new().set_num_threads(config::THREAD_POOL_SIZE));
+    let pool_result = rayon::initialize(rayon::Configuration::new()
+        .set_num_threads(config::THREAD_POOL_SIZE));
+
+    if pool_result.is_err() {
+        println!("Failed to initalize the configured thread pool size. Unable to start.");
+        return;
+    }
 
     let db = get_db_connection();
     let api = get_api_client();
@@ -73,9 +81,9 @@ fn main() {
         let now = UTC::now().timestamp();
 
         let update_start_time = if time_arg < (now - config::MM_CHANGELOG_MAX_TIMESPAN) {
-            compute_update_start_time()
+            compute_update_start_time(&db)
         } else {
-            time_arg + create_res.map_or(0, |dur| dur.num_seconds())
+            time_arg + create_res.map_or(0, |(dur, _)| dur.num_seconds())
         };
 
         run_update_loop(&api, &db, update_start_time)
@@ -99,7 +107,7 @@ fn get_api_client() -> ThreadedAPI {
         .expect("Failed to initalize network client"))
 }
 
-fn run_create(api: &ThreadedAPI, db: &Database, run_start_time: i64) -> IngestResult<Duration> {
+fn run_create(api: &ThreadedAPI, db: &Database, run_start_time: i64) -> IngestResult<RunResult> {
 
     println!("Starting create run from {} : {}",
              run_start_time,
@@ -111,8 +119,8 @@ fn run_create(api: &ThreadedAPI, db: &Database, run_start_time: i64) -> IngestRe
     result
 }
 
-fn compute_update_start_time() -> i64 {
-    let newest_db_timestamp = 0;
+fn compute_update_start_time(db: &Database) -> i64 {
+    let newest_db_timestamp = get_most_recent_update_timestamp(db);
     let now = UTC::now().timestamp();
 
     if newest_db_timestamp < (now - config::MM_CHANGELOG_MAX_TIMESPAN) {
@@ -123,6 +131,51 @@ fn compute_update_start_time() -> i64 {
     } else {
         newest_db_timestamp
     }
+}
+
+fn get_most_recent_update_timestamp(db: &Database) -> i64 {
+    get_timestamps_from_db(db)
+        .into_iter()
+        .fold(dawn_of_time(),
+              |max_datetime, datetime| std::cmp::max(max_datetime, datetime))
+        .timestamp()
+}
+
+fn get_timestamps_from_db(db: &Database) -> Vec<DateTime<UTC>> {
+    let collections = vec!["asset", "episode", "season", "show", "special"];
+
+    collections.iter()
+        .filter_map(|coll_name| {
+            let coll = db.collection(coll_name);
+            let mut query_options = FindOptions::new().with_limit(1);
+            query_options.sort = Some(doc! {
+            "attributes.updated_at" => (-1)
+        });
+
+            coll.find(None, Some(query_options))
+                .ok()
+                .and_then(|mut cursor| cursor.next())
+                .and_then(|result| result.ok())
+                .and_then(|mut document| {
+                    document.remove("attributes")
+                        .and_then(|attributes| {
+                            match attributes {
+                                bson::Bson::Document(mut attr) => {
+                                    match attr.remove("updated_at") {
+                                        Some(bson::Bson::UtcDatetime(datetime)) => Some(datetime),
+                                        _ => None,
+                                    }
+                                }
+                                _ => None,
+                            }
+                        })
+                })
+        })
+        .collect::<Vec<DateTime<UTC>>>()
+}
+
+fn dawn_of_time() -> DateTime<UTC> {
+    UTC.ymd(1970, 1, 1).and_hms(0, 0, 0)
 }
 
 fn run_update_loop(api: &ThreadedAPI, db: &Database, run_start_time: i64) {
@@ -150,7 +203,7 @@ fn run_update_loop(api: &ThreadedAPI, db: &Database, run_start_time: i64) {
     }
 }
 
-fn run_update(api: &ThreadedAPI, db: &Database, run_start_time: i64) -> IngestResult<Duration> {
+fn run_update(api: &ThreadedAPI, db: &Database, run_start_time: i64) -> IngestResult<RunResult> {
 
     let date_string = NaiveDateTime::from_timestamp(run_start_time, 0)
         .format("%Y-%m-%dT%H:%M:%S")
@@ -162,11 +215,11 @@ fn run_update(api: &ThreadedAPI, db: &Database, run_start_time: i64) -> IngestRe
                     run_start_time)
 }
 
-fn import_response(response: CDCResult<String>,
+fn import_response(response: MMCResult<String>,
                    api: &ThreadedAPI,
                    db: &Database,
                    run_start_time: i64)
-                   -> IngestResult<Duration> {
+                   -> IngestResult<RunResult> {
     let start_time = UTC::now();
 
     let collection = match response {
@@ -181,21 +234,25 @@ fn import_response(response: CDCResult<String>,
     };
 
     collection.and_then(|coll| {
-            coll.import(api, db, true, &vec![], run_start_time);
-            Ok(UTC::now() - start_time)
+            let res = coll.import(api, db, true, &vec![], run_start_time);
+            Ok((UTC::now() - start_time, res))
         })
-        .or(Ok(Duration::seconds(0)))
+        .or(Ok((Duration::seconds(0), (0, 1))))
 }
 
-fn print_runtime(label: &str, run_time: &IngestResult<Duration>) {
+fn print_runtime(label: &str, run_time: &IngestResult<RunResult>) {
     match *run_time {
-        Ok(ref time) => print_sucess(label, time),
+        Ok(ref results) => print_sucess(label, results),
         Err(ref err) => print_failure(label, err),
     }
 }
 
-fn print_sucess(label: &str, duration: &Duration) {
-    println!("{} run took {} seconds", label, duration)
+fn print_sucess(label: &str, &(dur, (pass, fail)): &RunResult) {
+    println!("{} run took {} seconds with {} successes and {} failures.",
+             label,
+             dur.num_seconds(),
+             pass,
+             fail)
 }
 
 fn print_failure(label: &str, error: &IngestError) {

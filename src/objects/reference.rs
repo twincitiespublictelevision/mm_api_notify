@@ -13,6 +13,7 @@ use error::IngestError;
 use objects::import::Importable;
 use objects::object::Object;
 use objects::utils;
+use types::ImportResult;
 use types::ThreadedAPI;
 
 #[derive(Debug, PartialEq)]
@@ -38,7 +39,8 @@ impl Ref {
                       db: &Database,
                       follow_refs: bool,
                       path_from_root: &Vec<&str>,
-                      since: i64) {
+                      since: i64)
+                      -> ImportResult {
 
         let res = utils::parse_response(api.url(self.self_url.as_str()))
             .and_then(|json| Object::from_json(&json))
@@ -47,11 +49,13 @@ impl Ref {
         if res.is_err() {
             println!("Skipping {} {} due to {:?}", self.ref_type, self.id, res);
         }
+
+        res.unwrap_or((0, 1))
     }
 
-    fn import_changelog(&self, api: &ThreadedAPI, db: &Database, action: &str) {
+    fn import_changelog(&self, api: &ThreadedAPI, db: &Database, action: &str) -> ImportResult {
         match action {
-            "delete" => (/* TODO: Perform deletion */),
+            "delete" => /* TODO: Perform deletion */ (0, 0),
             _ => self.import_general(api, db, false, &vec![], 0),
         }
     }
@@ -65,7 +69,8 @@ impl Importable for Ref {
               db: &Database,
               follow_refs: bool,
               path_from_root: &Vec<&str>,
-              since: i64) {
+              since: i64)
+              -> ImportResult {
 
         // When importing a reference we branch based on an inspection of the attributes. If this
         // a changelog reference then we prefer to use a custom import.
