@@ -6,6 +6,6 @@ use mm_client::Client;
 
 use std::sync::Arc;
 
-pub type ThreadedAPI = Arc<Client<'static>>;
+pub type ThreadedAPI = Arc<Client>;
 pub type ImportResult = (i64, i64);
 pub type RunResult = (Duration, ImportResult);

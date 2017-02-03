@@ -1,0 +1,14 @@
+thread_pool_size = 8
+min_runtime_delta = 30
+
+[db]
+host = ""
+port = 27017
+name = ""
+username = ""
+password = ""
+
+[mm]
+key = ""
+secret = ""
+changelog_max_timespan = 2505600

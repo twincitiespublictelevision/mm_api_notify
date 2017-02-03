@@ -27,6 +27,7 @@ use serde_json::Value as Json;
 
 use std::sync::Arc;
 
+use config::{DBConfig, MMConfig, parse_config};
 use error::{IngestError, IngestResult};
 use objects::Collection;
 use objects::Importable;
@@ -54,56 +55,65 @@ fn main() {
         .arg(Arg::with_name("start-time").long("start-time").short("t").takes_value(true))
         .get_matches();
 
-    // Initialize the thread pools
-    let pool_result = rayon::initialize(rayon::Configuration::new()
-        .set_num_threads(config::THREAD_POOL_SIZE));
+    parse_config("config.toml")
+        .ok_or(IngestError::InvalidConfig)
+        .and_then(|config| {
 
-    if pool_result.is_err() {
-        println!("Failed to initalize the configured thread pool size. Unable to start.");
-        return;
-    }
+            // Initialize the thread pools
+            rayon::initialize(rayon::Configuration::new().set_num_threads(config.thread_pool_size))
+                .map_err(IngestError::ThreadPool)
+                .or_else(|err| {
+                    println!("Failed to initalize the configured thread pool size. Unable to \
+                              start.");
+                    Err(err)
+                })
+                .and_then(|_| {
+                    let db = get_db_connection(&config.db);
+                    let api = get_api_client(&config.mm);
 
-    let db = get_db_connection();
-    let api = get_api_client();
+                    let time_arg = matches.value_of("start-time").map_or(0, |arg| {
+                        arg.parse::<i64>().expect("Could not parse start time")
+                    });
 
-    let time_arg = matches.value_of("start-time").map_or(0, |arg| {
-        arg.parse::<i64>().expect("Could not parse start time")
-    });
+                    let create_res = if matches.is_present("create") {
+                        run_create(&api, &db, time_arg).ok()
+                    } else {
+                        None
+                    };
 
-    let create_res = if matches.is_present("create") {
-        run_create(&api, &db, time_arg).ok()
-    } else {
-        None
-    };
+                    if !matches.is_present("skip-update") {
 
-    if !matches.is_present("skip-update") {
+                        let now = UTC::now().timestamp();
 
-        let now = UTC::now().timestamp();
+                        let update_start_time = if time_arg <
+                                                   (now - config.mm.changelog_max_timespan) {
+                            compute_update_start_time(&db, config.mm.changelog_max_timespan)
+                        } else {
+                            time_arg + create_res.map_or(0, |(dur, _)| dur.num_seconds())
+                        };
 
-        let update_start_time = if time_arg < (now - config::MM_CHANGELOG_MAX_TIMESPAN) {
-            compute_update_start_time(&db)
-        } else {
-            time_arg + create_res.map_or(0, |(dur, _)| dur.num_seconds())
-        };
+                        run_update_loop(&api, &db, update_start_time, config.min_runtime_delta)
+                    };
 
-        run_update_loop(&api, &db, update_start_time)
-    }
+                    Ok(())
+                })
+        });
 }
 
-fn get_db_connection() -> Database {
+fn get_db_connection(config: &DBConfig) -> Database {
     // // Set up the database connection.
-    let client = Client::connect(config::DB_HOST, config::DB_PORT)
+    let client = Client::connect(config.host.as_str(), config.port)
         .ok()
         .expect("Failed to initialize client.");
-    let db = client.db(config::DB_NAME);
-    db.auth(config::DB_USERNAME, config::DB_PASSWORD)
+    let db = client.db(config.name.as_str());
+    db.auth(config.username.as_str(), config.password.as_str())
         .ok()
         .expect("Failed to authorize user.");
     db
 }
 
-fn get_api_client() -> ThreadedAPI {
-    Arc::new(APIClient::qa(config::MM_KEY, config::MM_SECRET)
+fn get_api_client(config: &MMConfig) -> ThreadedAPI {
+    Arc::new(APIClient::qa(config.key.as_str(), config.secret.as_str())
         .expect("Failed to initalize network client"))
 }
 
@@ -119,15 +129,15 @@ fn run_create(api: &ThreadedAPI, db: &Database, run_start_time: i64) -> IngestRe
     result
 }
 
-fn compute_update_start_time(db: &Database) -> i64 {
+fn compute_update_start_time(db: &Database, max_timespan: i64) -> i64 {
     let newest_db_timestamp = get_most_recent_update_timestamp(db);
     let now = UTC::now().timestamp();
 
-    if newest_db_timestamp < (now - config::MM_CHANGELOG_MAX_TIMESPAN) {
+    if newest_db_timestamp < (now - max_timespan) {
         println!("Newest database record exceeds the maximum threshold for updates. Performing \
                   update run with the maximum threshold. Consider performing a create run to \
                   fully update the database.");
-        now - config::MM_CHANGELOG_MAX_TIMESPAN
+        now - max_timespan
     } else {
         newest_db_timestamp
     }
@@ -178,7 +188,7 @@ fn dawn_of_time() -> DateTime<UTC> {
     UTC.ymd(1970, 1, 1).and_hms(0, 0, 0)
 }
 
-fn run_update_loop(api: &ThreadedAPI, db: &Database, run_start_time: i64) {
+fn run_update_loop(api: &ThreadedAPI, db: &Database, run_start_time: i64, delta: i64) {
     let mut import_start_time = run_start_time;
     let mut import_completion_time = UTC::now().timestamp();
     let mut next_run_time = run_start_time;
@@ -191,7 +201,7 @@ fn run_update_loop(api: &ThreadedAPI, db: &Database, run_start_time: i64) {
     loop {
         if UTC::now().timestamp() > next_run_time {
 
-            next_run_time = UTC::now().timestamp() + config::MIN_RUNTIME_DELTA;
+            next_run_time = UTC::now().timestamp() + delta;
 
             let run_time = run_update(api, db, import_start_time);
 
