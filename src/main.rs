@@ -1,3 +1,6 @@
+#![feature(alloc_system)]
+extern crate alloc_system;
+
 #[macro_use]
 extern crate bson;
 extern crate chrono;
@@ -10,6 +13,7 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
+mod api;
 mod config;
 mod error;
 mod objects;
@@ -27,7 +31,7 @@ use serde_json::Value as Json;
 
 use std::sync::Arc;
 
-use config::{DBConfig, MMConfig, parse_config};
+use config::{DBConfig, MMConfig, get_config};
 use error::{IngestError, IngestResult};
 use objects::Collection;
 use objects::Importable;
@@ -55,7 +59,7 @@ fn main() {
         .arg(Arg::with_name("start-time").long("start-time").short("t").takes_value(true))
         .get_matches();
 
-    parse_config("config.toml")
+    get_config()
         .ok_or(IngestError::InvalidConfig)
         .and_then(|config| {
 
@@ -104,11 +108,11 @@ fn get_db_connection(config: &DBConfig) -> Database {
     // // Set up the database connection.
     let client = Client::connect(config.host.as_str(), config.port)
         .ok()
-        .expect("Failed to initialize client.");
+        .expect("Failed to initialize MongoDB client.");
     let db = client.db(config.name.as_str());
     db.auth(config.username.as_str(), config.password.as_str())
         .ok()
-        .expect("Failed to authorize user.");
+        .expect("Failed to authorize MongoDB user.");
     db
 }
 
@@ -168,16 +172,14 @@ fn get_timestamps_from_db(db: &Database) -> Vec<DateTime<UTC>> {
                 .and_then(|result| result.ok())
                 .and_then(|mut document| {
                     document.remove("attributes")
-                        .and_then(|attributes| {
-                            match attributes {
-                                bson::Bson::Document(mut attr) => {
-                                    match attr.remove("updated_at") {
-                                        Some(bson::Bson::UtcDatetime(datetime)) => Some(datetime),
-                                        _ => None,
-                                    }
+                        .and_then(|attributes| match attributes {
+                            bson::Bson::Document(mut attr) => {
+                                match attr.remove("updated_at") {
+                                    Some(bson::Bson::UtcDatetime(datetime)) => Some(datetime),
+                                    _ => None,
                                 }
-                                _ => None,
                             }
+                            _ => None,
                         })
                 })
         })
@@ -244,7 +246,7 @@ fn import_response(response: MMCResult<String>,
     };
 
     collection.and_then(|coll| {
-            let res = coll.import(api, db, true, &vec![], run_start_time);
+            let res = coll.import(api, db, true, run_start_time);
             Ok((UTC::now() - start_time, res))
         })
         .or(Ok((Duration::seconds(0), (0, 1))))

@@ -1,5 +1,6 @@
 extern crate toml;
 
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
 
@@ -11,6 +12,8 @@ pub struct Config {
     pub mm: MMConfig,
     pub thread_pool_size: usize,
     pub min_runtime_delta: i64,
+    pub enable_hooks: bool,
+    pub hooks: Option<APIConfig>,
 }
 
 // Database configuration/
@@ -31,7 +34,14 @@ pub struct MMConfig {
     pub changelog_max_timespan: i64,
 }
 
-pub fn parse_config(path: &str) -> Option<Config> {
+// API Webhook configuration
+pub type APIConfig = BTreeMap<String, Vec<String>>;
+
+pub fn get_config() -> Option<Config> {
+    parse_config("config.toml")
+}
+
+fn parse_config(path: &str) -> Option<Config> {
     let mut config_toml = String::new();
 
     let mut file = match File::open(path) {

@@ -50,12 +50,11 @@ impl Collection {
                    api: &ThreadedAPI,
                    db: &Database,
                    follow_refs: bool,
-                   path_from_root: &Vec<&str>,
                    since: i64)
                    -> ImportResult {
         self.page
             .par_iter()
-            .map(|item| item.import(api, db, follow_refs, path_from_root, since))
+            .map(|item| item.import(api, db, follow_refs, since))
             .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2))
     }
 }
@@ -67,7 +66,6 @@ impl Importable for Collection {
               api: &ThreadedAPI,
               db: &Database,
               follow_refs: bool,
-              path_from_root: &Vec<&str>,
               since: i64)
               -> ImportResult {
 
@@ -87,14 +85,16 @@ impl Importable for Collection {
                             page_url.push_str("page=");
                             page_url.push_str(page_num.to_string().as_str());
 
-                            self.get_collection(api, page_url.as_str()).and_then(|collection| {
-                                Ok(collection.import_page(api, db, follow_refs, path_from_root, since))
-                            }).unwrap_or((0, 1))
+                            self.get_collection(api, page_url.as_str())
+                                .and_then(|collection| {
+                                    Ok(collection.import_page(api, db, follow_refs, since))
+                                })
+                                .unwrap_or((0, 1))
                         })
                         .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2)))
                 })
             })
-            .or_else(|| Some(self.import_page(api, db, follow_refs, path_from_root, since)))
+            .or_else(|| Some(self.import_page(api, db, follow_refs, since)))
             .unwrap_or((0, 1))
     }
 
@@ -109,7 +109,7 @@ impl Importable for Collection {
                         meta_map.get("pagination").and_then(|pagination| {
                             pagination.as_object().and_then(|pagination_map| {
                                 Some((pagination_map.get("per_page")
-                                    .and_then(|per_page| per_page.as_u64()),
+                                          .and_then(|per_page| per_page.as_u64()),
                                       pagination_map.get("count").and_then(|total| total.as_u64())))
                             })
                         })
@@ -121,13 +121,9 @@ impl Importable for Collection {
                                 .filter_map(|item| Ref::from_json(item).ok())
                                 .collect::<Vec<Ref>>())
                         })
-                        .and_then(|items| {
-                            match pagination_data {
-                                Some((Some(per_page), Some(total))) => {
-                                    Some((items, per_page, total))
-                                }
-                                _ => None,
-                            }
+                        .and_then(|items| match pagination_data {
+                            Some((Some(per_page), Some(total))) => Some((items, per_page, total)),
+                            _ => None,
                         })
                         .and_then(|(items, per_page, total)| {
                             Some((Collection::new(items,

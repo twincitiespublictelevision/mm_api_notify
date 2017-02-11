@@ -6,9 +6,8 @@ extern crate serde;
 extern crate serde_json;
 
 use self::bson::Bson;
-use self::chrono::UTC;
-use self::chrono::DateTime;
 use self::bson::Document;
+use self::chrono::{DateTime, UTC};
 use self::mongodb::db::{Database, ThreadedDatabase};
 use self::mongodb::coll::options::FindOneAndUpdateOptions;
 use self::rayon::prelude::*;
@@ -16,10 +15,13 @@ use self::serde_json::Value as Json;
 
 use std::fmt;
 
+use api::Payload;
+use config::get_config;
 use error::IngestResult;
 use error::IngestError;
-use objects::collection::Collection;
-use objects::import::Importable;
+use objects::Collection;
+use objects::Importable;
+use objects::Ref;
 use objects::utils;
 use types::ImportResult;
 use types::ThreadedAPI;
@@ -29,6 +31,7 @@ pub struct Object {
     #[serde(rename = "_id")]
     pub id: String,
     pub attributes: Json,
+    #[serde(rename = "type")]
     pub object_type: String,
     pub links: Json,
 }
@@ -43,23 +46,49 @@ impl Object {
         }
     }
 
+    pub fn parent(&self, db: &Database) -> Option<Object> {
+        vec!["episode", "season", "special", "show", "franchise"]
+            .iter()
+            .filter_map(|parent_type| {
+                self.attributes.lookup(parent_type).and_then(|parent| Ref::from_json(parent).ok())
+            })
+            .filter_map(|parent_ref| {
+                Object::lookup(parent_ref.id.as_str(), parent_ref.ref_type.as_str(), db)
+            })
+            .collect::<Vec<Object>>()
+            .pop()
+    }
+
+    fn lookup(id: &str, item_type: &str, db: &Database) -> Option<Object> {
+        let query = doc!{
+            "_id" => id
+        };
+
+        let coll = db.collection(item_type);
+
+        coll.find(Some(query), None).ok().and_then(|mut cursor| match cursor.next() {
+            Some(Ok(doc)) => {
+                bson::from_bson(utils::map_bson_dates_to_string(Bson::Document(doc))).ok()
+            }
+            _ => None,
+        })
+    }
+
     fn import_children(&self,
                        api: &ThreadedAPI,
                        db: &Database,
                        follow_refs: bool,
-                       path_from_root: &Vec<&str>,
                        since: i64)
                        -> ImportResult {
 
-        let mut path_for_children = path_from_root.clone();
-        path_for_children.push(self.id.as_str());
-
-        vec!["assets", "episodes", "extras", "seasons", "shows", "specials"]
+        vec!["assets", "episodes", "seasons", "shows", "specials"]
             .par_iter()
             .map(|child_type| {
-                self.child_collection(api, child_type).and_then(|child_collection| {
-                    Some(child_collection.import(api, db, follow_refs, &path_for_children, since))
-                }).unwrap_or((0, 1))
+                self.child_collection(api, child_type)
+                    .and_then(|child_collection| {
+                        Some(child_collection.import(api, db, follow_refs, since))
+                    })
+                    .unwrap_or((0, 1))
             })
             .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2))
     }
@@ -100,7 +129,6 @@ impl Importable for Object {
               api: &ThreadedAPI,
               db: &Database,
               follow_refs: bool,
-              path_from_root: &Vec<&str>,
               since: i64)
               -> ImportResult {
 
@@ -108,8 +136,6 @@ impl Importable for Object {
                  self.id,
                  self.attributes.lookup("title").unwrap().as_str().unwrap());
 
-        // Check the updated_at date to determine if the db needs to
-        // update this object
         let updated_at_time = self.attributes
             .find("updated_at")
             .and_then(|update_string| update_string.as_str())
@@ -117,19 +143,18 @@ impl Importable for Object {
             .and_then(|date| Some(date.timestamp()))
             .unwrap_or(0);
 
+        // Check the updated_at date to determine if the db needs to
+        // update this object
         let update_result = if updated_at_time > since {
-            match self.as_document() {
+            let res = match self.as_document() {
                 Ok(doc) => {
-
-                    // Insert the path from the root in the parents key
-                    // doc.insert("parents", bson::to_bson(path_from_root).unwrap());
 
                     let coll = db.collection(self.object_type.as_str());
                     let id = self.id.as_str();
 
                     let filter = doc! {
-                        "_id" => id
-                    };
+                            "_id" => id
+                        };
 
                     let mut options = FindOneAndUpdateOptions::new();
                     options.upsert = true;
@@ -138,17 +163,22 @@ impl Importable for Object {
                         Ok(_) => (1, 0),
                         Err(_) => (0, 1),
                     }
-
-
                 }
                 Err(_) => (0, 1),
+            };
+
+            if get_config().map_or(false, |conf| conf.enable_hooks) {
+                Payload::from_object(&self, db)
+                    .and_then(|payload| Some(payload.emitter().update()));
             }
+
+            res
         } else {
             (0, 0)
         };
 
         if follow_refs {
-            self.import_children(api, db, follow_refs, path_from_root, since);
+            self.import_children(api, db, follow_refs, since);
         };
 
         update_result

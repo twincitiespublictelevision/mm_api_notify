@@ -39,6 +39,25 @@ pub fn map_string_to_bson_dates(bson: Bson) -> Bson {
     }
 }
 
+pub fn map_bson_dates_to_string(bson: Bson) -> Bson {
+    match bson {
+        Bson::UtcDatetime(datetime) => {
+            Bson::String(datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        }
+        Bson::Document(doc) => {
+            Bson::Document(doc.into_iter()
+                .map(|(key, bson_val)| (key, map_bson_dates_to_string(bson_val)))
+                .collect::<bson::Document>())
+        }
+        Bson::Array(elements) => {
+            Bson::Array(elements.into_iter()
+                .map(|b| map_bson_dates_to_string(b))
+                .collect::<Vec<Bson>>())
+        }
+        x => x,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use bson::Bson;
