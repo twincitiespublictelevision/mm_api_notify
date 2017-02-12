@@ -8,6 +8,7 @@ use self::serde_json::Value as Json;
 use self::serde_json::value::ToJson;
 
 use api::Emitter;
+use config::Config;
 use objects::Object;
 use objects::Ref;
 
@@ -51,7 +52,7 @@ impl Payload {
         }
     }
 
-    pub fn emitter(&self) -> Emitter {
-        Emitter::new(&self)
+    pub fn emitter<'a, 'b>(&'a self, config: &'b Config) -> Emitter<'a, 'b> {
+        Emitter::new(self, config)
     }
 }

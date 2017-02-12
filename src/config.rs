@@ -37,19 +37,14 @@ pub struct MMConfig {
 // API Webhook configuration
 pub type APIConfig = BTreeMap<String, Vec<String>>;
 
-pub fn get_config() -> Option<Config> {
-    parse_config("config.toml")
-}
-
-fn parse_config(path: &str) -> Option<Config> {
+pub fn parse_config(path: &str) -> Option<Config> {
     let mut config_toml = String::new();
 
     let mut file = match File::open(path) {
         Ok(file) => file,
         Err(err) => {
-            println!("Error: Could not find config file (config.toml). See the included \
-                    config.toml.example for configuration instructions. {}",
-                     err);
+            println!("Error: Could not find config file (config.toml) at {}",
+                     path);
             return None;
         }
     };

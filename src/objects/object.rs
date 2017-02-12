@@ -2,7 +2,6 @@ extern crate bson;
 extern crate chrono;
 extern crate mongodb;
 extern crate rayon;
-extern crate serde;
 extern crate serde_json;
 
 use self::bson::Bson;
@@ -16,13 +15,13 @@ use self::serde_json::Value as Json;
 use std::fmt;
 
 use api::Payload;
-use config::get_config;
 use error::IngestResult;
 use error::IngestError;
 use objects::Collection;
 use objects::Importable;
 use objects::Ref;
 use objects::utils;
+use runtime::Runtime;
 use types::ImportResult;
 use types::ThreadedAPI;
 
@@ -74,19 +73,14 @@ impl Object {
         })
     }
 
-    fn import_children(&self,
-                       api: &ThreadedAPI,
-                       db: &Database,
-                       follow_refs: bool,
-                       since: i64)
-                       -> ImportResult {
+    fn import_children(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
 
         vec!["assets", "episodes", "seasons", "shows", "specials"]
             .par_iter()
             .map(|child_type| {
-                self.child_collection(api, child_type)
+                self.child_collection(&runtime.api, child_type)
                     .and_then(|child_collection| {
-                        Some(child_collection.import(api, db, follow_refs, since))
+                        Some(child_collection.import(runtime, follow_refs, since))
                     })
                     .unwrap_or((0, 1))
             })
@@ -125,16 +119,14 @@ impl Object {
 impl Importable for Object {
     type Value = Object;
 
-    fn import(&self,
-              api: &ThreadedAPI,
-              db: &Database,
-              follow_refs: bool,
-              since: i64)
-              -> ImportResult {
+    fn import(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
 
-        println!("Import {} {}",
-                 self.id,
-                 self.attributes.lookup("title").unwrap().as_str().unwrap());
+        if (runtime.verbose) {
+            println!("Importing {} {} {}",
+                     self.id,
+                     self.object_type,
+                     self.attributes.lookup("title").unwrap().as_str().unwrap());
+        }
 
         let updated_at_time = self.attributes
             .find("updated_at")
@@ -145,11 +137,11 @@ impl Importable for Object {
 
         // Check the updated_at date to determine if the db needs to
         // update this object
-        let update_result = if updated_at_time > since {
+        let mut update_result = if updated_at_time >= since {
             let res = match self.as_document() {
                 Ok(doc) => {
 
-                    let coll = db.collection(self.object_type.as_str());
+                    let coll = runtime.db.collection(self.object_type.as_str());
                     let id = self.id.as_str();
 
                     let filter = doc! {
@@ -167,9 +159,9 @@ impl Importable for Object {
                 Err(_) => (0, 1),
             };
 
-            if get_config().map_or(false, |conf| conf.enable_hooks) {
-                Payload::from_object(&self, db)
-                    .and_then(|payload| Some(payload.emitter().update()));
+            if runtime.config.enable_hooks {
+                Payload::from_object(self, &runtime.db)
+                    .and_then(|payload| Some(payload.emitter(&runtime.config).update()));
             }
 
             res
@@ -178,7 +170,8 @@ impl Importable for Object {
         };
 
         if follow_refs {
-            self.import_children(api, db, follow_refs, since);
+            let child_results = self.import_children(runtime, follow_refs, since);
+            update_result = (update_result.0 + child_results.0, update_result.1 + child_results.1);
         };
 
         update_result

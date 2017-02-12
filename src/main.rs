@@ -1,6 +1,4 @@
-#![feature(alloc_system)]
-extern crate alloc_system;
-
+extern crate app_dirs;
 #[macro_use]
 extern crate bson;
 extern crate chrono;
@@ -17,8 +15,10 @@ mod api;
 mod config;
 mod error;
 mod objects;
+mod runtime;
 mod types;
 
+use app_dirs::{AppDataType, AppInfo, get_app_dir};
 use clap::{Arg, App};
 use chrono::{DateTime, Duration, NaiveDateTime, TimeZone, UTC};
 use mm_client::Client as APIClient;
@@ -31,13 +31,13 @@ use serde_json::Value as Json;
 
 use std::sync::Arc;
 
-use config::{DBConfig, MMConfig, get_config};
+use config::{DBConfig, MMConfig, parse_config};
 use error::{IngestError, IngestResult};
 use objects::Collection;
 use objects::Importable;
+use runtime::Runtime;
 use types::RunResult;
 use types::ThreadedAPI;
-
 
 ///
 /// Starts processing
@@ -46,20 +46,49 @@ fn main() {
 
     let matches = App::new("Video Ingest")
         .version(env!("CARGO_PKG_VERSION"))
-        .arg(Arg::with_name("create")
-            .short("c")
-            .long("create")
+        .arg(Arg::with_name("build")
+            .short("b")
+            .long("build")
             .takes_value(false)
-            .help("Performs a full create run prior to entering the update loop"))
+            .help("Performs a full build run prior to entering the update loop"))
+        .arg(Arg::with_name("config")
+            .short("c")
+            .long("config")
+            .takes_value(true)
+            .help("Path to configuration file"))
         .arg(Arg::with_name("skip-update")
             .short("k")
             .long("skip-update")
             .takes_value(false)
             .help("Prevents update loop from running"))
+        .arg(Arg::with_name("verbose")
+            .short("v")
+            .long("verbose")
+            .takes_value(false)
+            .help("Provides feedback on import during processing"))
         .arg(Arg::with_name("start-time").long("start-time").short("t").takes_value(true))
         .get_matches();
 
-    get_config()
+    let config_path = if !matches.is_present("config") {
+            let info = AppInfo {
+                name: env!("CARGO_PKG_NAME"),
+                author: env!("CARGO_PKG_AUTHORS"),
+            };
+
+            let path = get_app_dir(AppDataType::UserConfig, &info, "/")
+                .and_then(|mut path| {
+                    path.push("config.toml");
+                    Ok(path)
+                })
+                .expect("Failed to run. Unable to determine path default config location.");
+
+            path.to_str().map(|str| str.to_string())
+        } else {
+            matches.value_of("config").map(|str| str.to_string())
+        }
+        .expect("Failed to run. Unable to parse path to default config location.");
+
+    parse_config(config_path.as_str())
         .ok_or(IngestError::InvalidConfig)
         .and_then(|config| {
 
@@ -75,12 +104,19 @@ fn main() {
                     let db = get_db_connection(&config.db);
                     let api = get_api_client(&config.mm);
 
+                    let runtime = Runtime {
+                        api: api,
+                        config: config,
+                        db: db,
+                        verbose: matches.is_present("verbose"),
+                    };
+
                     let time_arg = matches.value_of("start-time").map_or(0, |arg| {
                         arg.parse::<i64>().expect("Could not parse start time")
                     });
 
-                    let create_res = if matches.is_present("create") {
-                        run_create(&api, &db, time_arg).ok()
+                    let build_res = if matches.is_present("build") {
+                        run_build(&runtime, time_arg).ok()
                     } else {
                         None
                     };
@@ -89,14 +125,17 @@ fn main() {
 
                         let now = UTC::now().timestamp();
 
-                        let update_start_time = if time_arg <
-                                                   (now - config.mm.changelog_max_timespan) {
-                            compute_update_start_time(&db, config.mm.changelog_max_timespan)
-                        } else {
-                            time_arg + create_res.map_or(0, |(dur, _)| dur.num_seconds())
-                        };
+                        let update_start_time =
+                            if time_arg < (now - runtime.config.mm.changelog_max_timespan) {
+                                compute_update_start_time(&runtime.db,
+                                                          runtime.config.mm.changelog_max_timespan)
+                            } else {
+                                time_arg + build_res.map_or(0, |(dur, _)| dur.num_seconds())
+                            };
 
-                        run_update_loop(&api, &db, update_start_time, config.min_runtime_delta)
+                        run_update_loop(&runtime,
+                                        update_start_time,
+                                        runtime.config.min_runtime_delta)
                     };
 
                     Ok(())
@@ -107,11 +146,9 @@ fn main() {
 fn get_db_connection(config: &DBConfig) -> Database {
     // // Set up the database connection.
     let client = Client::connect(config.host.as_str(), config.port)
-        .ok()
         .expect("Failed to initialize MongoDB client.");
     let db = client.db(config.name.as_str());
     db.auth(config.username.as_str(), config.password.as_str())
-        .ok()
         .expect("Failed to authorize MongoDB user.");
     db
 }
@@ -121,13 +158,13 @@ fn get_api_client(config: &MMConfig) -> ThreadedAPI {
         .expect("Failed to initalize network client"))
 }
 
-fn run_create(api: &ThreadedAPI, db: &Database, run_start_time: i64) -> IngestResult<RunResult> {
+fn run_build(runtime: &Runtime, run_start_time: i64) -> IngestResult<RunResult> {
 
-    println!("Starting create run from {} : {}",
+    println!("Starting build run from {} : {}",
              run_start_time,
              NaiveDateTime::from_timestamp(run_start_time, 0));
 
-    let result = import_response(api.shows(vec![]), api, db, run_start_time);
+    let result = import_response(runtime.api.shows(vec![]), runtime, run_start_time);
     print_runtime("Create", &result);
 
     result
@@ -139,7 +176,7 @@ fn compute_update_start_time(db: &Database, max_timespan: i64) -> i64 {
 
     if newest_db_timestamp < (now - max_timespan) {
         println!("Newest database record exceeds the maximum threshold for updates. Performing \
-                  update run with the maximum threshold. Consider performing a create run to \
+                  update run with the maximum threshold. Consider performing a build (-b) run to \
                   fully update the database.");
         now - max_timespan
     } else {
@@ -150,8 +187,7 @@ fn compute_update_start_time(db: &Database, max_timespan: i64) -> i64 {
 fn get_most_recent_update_timestamp(db: &Database) -> i64 {
     get_timestamps_from_db(db)
         .into_iter()
-        .fold(dawn_of_time(),
-              |max_datetime, datetime| std::cmp::max(max_datetime, datetime))
+        .fold(dawn_of_time(), std::cmp::max)
         .timestamp()
 }
 
@@ -190,7 +226,7 @@ fn dawn_of_time() -> DateTime<UTC> {
     UTC.ymd(1970, 1, 1).and_hms(0, 0, 0)
 }
 
-fn run_update_loop(api: &ThreadedAPI, db: &Database, run_start_time: i64, delta: i64) {
+fn run_update_loop(runtime: &Runtime, run_start_time: i64, delta: i64) {
     let mut import_start_time = run_start_time;
     let mut import_completion_time = UTC::now().timestamp();
     let mut next_run_time = run_start_time;
@@ -205,7 +241,7 @@ fn run_update_loop(api: &ThreadedAPI, db: &Database, run_start_time: i64, delta:
 
             next_run_time = UTC::now().timestamp() + delta;
 
-            let run_time = run_update(api, db, import_start_time);
+            let run_time = run_update(runtime, import_start_time);
 
             print_runtime(label, &run_time);
 
@@ -215,21 +251,19 @@ fn run_update_loop(api: &ThreadedAPI, db: &Database, run_start_time: i64, delta:
     }
 }
 
-fn run_update(api: &ThreadedAPI, db: &Database, run_start_time: i64) -> IngestResult<RunResult> {
+fn run_update(runtime: &Runtime, run_start_time: i64) -> IngestResult<RunResult> {
 
     let date_string = NaiveDateTime::from_timestamp(run_start_time, 0)
         .format("%Y-%m-%dT%H:%M:%S")
         .to_string();
 
-    import_response(api.changelog(vec![("since", date_string.as_str())]),
-                    api,
-                    db,
+    import_response(runtime.api.changelog(vec![("since", date_string.as_str())]),
+                    runtime,
                     run_start_time)
 }
 
 fn import_response(response: MMCResult<String>,
-                   api: &ThreadedAPI,
-                   db: &Database,
+                   runtime: &Runtime,
                    run_start_time: i64)
                    -> IngestResult<RunResult> {
     let start_time = UTC::now();
@@ -246,7 +280,7 @@ fn import_response(response: MMCResult<String>,
     };
 
     collection.and_then(|coll| {
-            let res = coll.import(api, db, true, run_start_time);
+            let res = coll.import(runtime, true, run_start_time);
             Ok((UTC::now() - start_time, res))
         })
         .or(Ok((Duration::seconds(0), (0, 1))))

@@ -1,9 +1,6 @@
-extern crate mongodb;
 extern crate rayon;
-extern crate serde;
 extern crate serde_json;
 
-use self::mongodb::db::Database;
 use self::rayon::prelude::*;
 use self::serde_json::Value as Json;
 
@@ -15,6 +12,7 @@ use error::IngestError;
 use objects::import::Importable;
 use objects::reference::Ref;
 use objects::utils;
+use runtime::Runtime;
 use types::ImportResult;
 use types::ThreadedAPI;
 
@@ -46,15 +44,10 @@ impl Collection {
         }
     }
 
-    fn import_page(&self,
-                   api: &ThreadedAPI,
-                   db: &Database,
-                   follow_refs: bool,
-                   since: i64)
-                   -> ImportResult {
+    fn import_page(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
         self.page
             .par_iter()
-            .map(|item| item.import(api, db, follow_refs, since))
+            .map(|item| item.import(runtime, follow_refs, since))
             .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2))
     }
 }
@@ -62,12 +55,7 @@ impl Collection {
 impl Importable for Collection {
     type Value = Collection;
 
-    fn import(&self,
-              api: &ThreadedAPI,
-              db: &Database,
-              follow_refs: bool,
-              since: i64)
-              -> ImportResult {
+    fn import(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
 
         let num_pages = (self.total as f64 / self.page_size as f64).ceil() as usize + 1;
 
@@ -81,20 +69,20 @@ impl Importable for Collection {
                         .map(|page_num| {
                             let mut page_url = String::new();
                             page_url.push_str(base_url);
-                            page_url.push(if base_url.contains("?") { '&' } else { '?' });
+                            page_url.push(if base_url.contains('?') { '&' } else { '?' });
                             page_url.push_str("page=");
                             page_url.push_str(page_num.to_string().as_str());
 
-                            self.get_collection(api, page_url.as_str())
+                            self.get_collection(&runtime.api, page_url.as_str())
                                 .and_then(|collection| {
-                                    Ok(collection.import_page(api, db, follow_refs, since))
+                                    Ok(collection.import_page(runtime, follow_refs, since))
                                 })
                                 .unwrap_or((0, 1))
                         })
                         .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2)))
                 })
             })
-            .or_else(|| Some(self.import_page(api, db, follow_refs, since)))
+            .or_else(|| Some(self.import_page(runtime, follow_refs, since)))
             .unwrap_or((0, 1))
     }
 
@@ -126,10 +114,10 @@ impl Importable for Collection {
                             _ => None,
                         })
                         .and_then(|(items, per_page, total)| {
-                            Some((Collection::new(items,
-                                                  links.clone(),
-                                                  per_page as usize,
-                                                  total as usize)))
+                            Some(Collection::new(items,
+                                                 links.clone(),
+                                                 per_page as usize,
+                                                 total as usize))
                         })
                 }
                 _ => None,

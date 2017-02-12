@@ -1,22 +1,19 @@
 extern crate chrono;
 extern crate mongodb;
-extern crate serde;
 extern crate serde_json;
 
-use self::mongodb::db::{Database, ThreadedDatabase};
 use self::serde_json::Value as Json;
 
 use std::fmt;
 
 use api::Payload;
-use config::get_config;
 use error::IngestResult;
 use error::IngestError;
 use objects::import::Importable;
 use objects::object::Object;
 use objects::utils;
+use runtime::Runtime;
 use types::ImportResult;
-use types::ThreadedAPI;
 
 #[derive(Debug, PartialEq)]
 pub struct Ref {
@@ -50,39 +47,33 @@ impl Ref {
         }
     }
 
-    fn import_general(&self,
-                      api: &ThreadedAPI,
-                      db: &Database,
-                      follow_refs: bool,
-                      since: i64)
-                      -> ImportResult {
+    fn import_general(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
 
-        let res = utils::parse_response(api.url(self.self_url.as_str()))
+        let res = utils::parse_response(runtime.api.url(self.self_url.as_str()))
             .and_then(|json| Object::from_json(&json))
-            .and_then(|obj| Ok(obj.import(api, db, follow_refs, since)));
+            .and_then(|obj| Ok(obj.import(runtime, follow_refs, since)));
 
-        if res.is_err() {
-            println!("Skipping {} {} due to {:?}", self.ref_type, self.id, res);
+        if runtime.verbose && res.is_err() {
+            println!("Skipping {} {} due to {:?}", self.id, self.ref_type, res);
         }
 
         res.unwrap_or((0, 1))
     }
 
     fn import_changelog(&self,
-                        api: &ThreadedAPI,
-                        db: &Database,
+                        runtime: &Runtime,
                         since: i64,
                         action: ImportAction)
                         -> ImportResult {
         match action {
             ImportAction::Delete => {
-                if get_config().map_or(false, |conf| conf.enable_hooks) {
-                    Payload::from_ref(self).emitter().delete();
+                if runtime.config.enable_hooks {
+                    Payload::from_ref(self).emitter(&runtime.config).delete();
                 }
 
                 (0, 0)
             }
-            ImportAction::Update => self.import_general(api, db, false, since),
+            ImportAction::Update => self.import_general(runtime, false, since),
         }
     }
 }
@@ -90,12 +81,7 @@ impl Ref {
 impl Importable for Ref {
     type Value = Ref;
 
-    fn import(&self,
-              api: &ThreadedAPI,
-              db: &Database,
-              follow_refs: bool,
-              since: i64)
-              -> ImportResult {
+    fn import(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
 
         // When importing a reference we branch based on an inspection of the attributes. If this
         // a changelog reference then we prefer to use a custom import.
@@ -103,9 +89,9 @@ impl Importable for Ref {
 
         match action {
             Some(action_str) => {
-                self.import_changelog(api, db, since, ImportAction::from(action_str))
+                self.import_changelog(runtime, since, ImportAction::from(action_str))
             }
-            None => self.import_general(api, db, follow_refs, since),
+            None => self.import_general(runtime, follow_refs, since),
         }
     }
 

@@ -32,7 +32,7 @@ pub fn map_string_to_bson_dates(bson: Bson) -> Bson {
         }
         Bson::Array(elements) => {
             Bson::Array(elements.into_iter()
-                .map(|b| map_string_to_bson_dates(b))
+                .map(map_string_to_bson_dates)
                 .collect::<Vec<Bson>>())
         }
         x => x,
@@ -51,7 +51,7 @@ pub fn map_bson_dates_to_string(bson: Bson) -> Bson {
         }
         Bson::Array(elements) => {
             Bson::Array(elements.into_iter()
-                .map(|b| map_bson_dates_to_string(b))
+                .map(map_bson_dates_to_string)
                 .collect::<Vec<Bson>>())
         }
         x => x,

@@ -1,9 +1,10 @@
 [package]
-authors = ["johnsonpaul1014 <pjohnson@tpt.org>"]
-name = "video_ingest"
+authors = ["TPT"]
+name = "mm_api_import"
 version = "0.1.0"
 
 [dependencies]
+app_dirs = "1.1.1"
 bson = "0.3.1"
 chan = "*"
 chan-signal = "0.1.6"
@@ -32,5 +33,7 @@ default-features = false
 features = ["serde"]
 version = "0.2.1"
 
+[profile]
+
 [profile.release]
-debug=true
+debug = true

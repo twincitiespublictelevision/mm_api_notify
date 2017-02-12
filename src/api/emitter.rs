@@ -1,10 +1,11 @@
 extern crate reqwest;
 
 use api::Payload;
-use config::get_config;
+use config::Config;
 
-pub struct Emitter<'a> {
+pub struct Emitter<'a, 'b> {
     payload: &'a Payload,
+    config: &'b Config,
 }
 
 enum EmitAction {
@@ -12,9 +13,12 @@ enum EmitAction {
     Update,
 }
 
-impl<'a> Emitter<'a> {
-    pub fn new(payload: &Payload) -> Emitter {
-        Emitter { payload: payload }
+impl<'a, 'b> Emitter<'a, 'b> {
+    pub fn new(payload: &'a Payload, config: &'b Config) -> Emitter<'a, 'b> {
+        Emitter {
+            payload: payload,
+            config: config,
+        }
     }
 
     pub fn delete(&self) -> u8 {
@@ -26,40 +30,39 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit(&self, method: EmitAction) -> u8 {
+        let payload_type =
+            self.payload.data.get("type").and_then(|type_json| type_json.as_str()).unwrap_or("");
 
-        get_config()
-            .and_then(|config| config.hooks)
-            .and_then(|all_hooks| {
-                let payload_type =
-                    self.payload.data.get("type").and_then(|type_json| type_json.as_str());
-
-                payload_type.and_then(|type_str| {
-                    all_hooks.get(type_str).and_then(|hooks| {
-                        Some(hooks.iter()
-                            .map(|hook| {
-                                reqwest::Client::new()
-                                    .and_then(|client| {
-                                        Ok(match method {
-                                            EmitAction::Delete => true,
-                                            EmitAction::Update => {
-                                                client.post(hook)
-                                                    .json(&self.payload)
-                                                    .send()
-                                                    .is_err()
-                                            }
+        match self.config.hooks {
+                Some(ref all_hooks) => {
+                    all_hooks.get(payload_type)
+                        .and_then(|hooks| {
+                            Some(hooks.iter()
+                                .map(|hook| {
+                                    reqwest::Client::new()
+                                        .and_then(|client| {
+                                            Ok(match method {
+                                                EmitAction::Delete => true,
+                                                EmitAction::Update => {
+                                                    client.post(hook)
+                                                        .json(&self.payload)
+                                                        .send()
+                                                        .is_err()
+                                                }
+                                            })
                                         })
-                                    })
-                                    .unwrap_or(false)
+                                        .unwrap_or(false)
 
-                            })
-                            .fold(0, |failures, did_fail| if did_fail {
-                                failures + 1
-                            } else {
-                                failures
-                            }))
-                    })
-                })
-            })
+                                })
+                                .fold(0, |failures, did_fail| if did_fail {
+                                    failures + 1
+                                } else {
+                                    failures
+                                }))
+                        })
+                }
+                _ => None,
+            }
             .unwrap_or(0)
     }
 }

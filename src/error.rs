@@ -38,9 +38,7 @@ impl fmt::Display for IngestError {
             IngestError::API(ref err) => err.fmt(f),
             IngestError::Parse(ref err) => err.fmt(f),
             IngestError::Serialize(ref err) => err.fmt(f),
-            IngestError::InvalidDocumentDataError => write!(f, ""),
-            IngestError::InvalidObjDataError => write!(f, ""),
-            IngestError::InvalidRefDataError => write!(f, ""),
+            _ => write!(f, ""),
         }
     }
 }
@@ -56,22 +54,17 @@ impl Error for IngestError {
             IngestError::API(ref err) => err.description(),
             IngestError::Parse(ref err) => err.description(),
             IngestError::Serialize(ref err) => err.description(),
-            IngestError::InvalidDocumentDataError => "",
-            IngestError::InvalidObjDataError => "",
-            IngestError::InvalidRefDataError => "",
+            _ => "",
         }
     }
 
     fn cause(&self) -> Option<&Error> {
         match *self {
-            IngestError::InvalidConfig => None,
             IngestError::ThreadPool(ref err) => Some(err),
             IngestError::API(ref err) => Some(err),
             IngestError::Parse(ref err) => Some(err),
             IngestError::Serialize(ref err) => Some(err),
-            IngestError::InvalidDocumentDataError => None,
-            IngestError::InvalidObjDataError => None,
-            IngestError::InvalidRefDataError => None,
+            _ => None,
         }
     }
 }
