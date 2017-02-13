@@ -154,7 +154,7 @@ fn get_db_connection(config: &DBConfig) -> Database {
 }
 
 fn get_api_client(config: &MMConfig) -> ThreadedAPI {
-    Arc::new(APIClient::qa(config.key.as_str(), config.secret.as_str())
+    Arc::new(APIClient::staging(config.key.as_str(), config.secret.as_str())
         .expect("Failed to initalize network client"))
 }
 
