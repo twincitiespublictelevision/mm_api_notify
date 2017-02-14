@@ -9,6 +9,7 @@ use self::rayon::prelude::*;
 use self::serde_json::Value as Json;
 
 use std::fmt;
+use std::sync::Arc;
 
 use api::Payload;
 use error::IngestResult;
@@ -19,6 +20,7 @@ use objects::Ref;
 use objects::utils;
 use runtime::Runtime;
 use types::{ImportResult, ThreadedAPI, ThreadedStore};
+use storage::Storage;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Object {
@@ -40,7 +42,7 @@ impl Object {
         }
     }
 
-    pub fn parent(&self, store: &ThreadedStore) -> Option<Object> {
+    pub fn parent<T: Storage<Object>>(&self, store: &Arc<T>) -> Option<Object> {
         vec!["episode", "season", "special", "show", "franchise"]
             .iter()
             .filter_map(|parent_type| {

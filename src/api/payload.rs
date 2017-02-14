@@ -1,15 +1,18 @@
 extern crate serde;
 extern crate serde_json;
 
-use self::serde_json::Map;
-use self::serde_json::Value as Json;
-use self::serde_json::value::ToJson;
+use serde_json::Map;
+use serde_json::Value as Json;
+use serde_json::value::ToJson;
+
+use std::sync::Arc;
 
 use api::Emitter;
 use config::Config;
 use objects::Object;
 use objects::Ref;
 use types::ThreadedStore;
+use storage::Storage;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Payload {
@@ -28,7 +31,7 @@ impl Payload {
         Payload::new(data)
     }
 
-    pub fn from_object(object: &Object, store: &ThreadedStore) -> Option<Payload> {
+    pub fn from_object<T: Storage<Object>>(object: &Object, store: &Arc<T>) -> Option<Payload> {
         if let Json::Object(mut data) = object.attributes.clone() {
             data.insert("id".to_string(), Json::String(object.id.clone()));
             data.insert("type".to_string(), Json::String(object.object_type.clone()));
@@ -53,5 +56,57 @@ impl Payload {
 
     pub fn emitter<'a, 'b>(&'a self, config: &'b Config) -> Emitter<'a, 'b> {
         Emitter::new(self, config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Map;
+    use serde_json::Value as Json;
+    use serde_json::value::ToJson;
+
+    use std::sync::Arc;
+
+    use api::payload::Payload;
+    use config::DBConfig;
+    use objects::{Object, Ref};
+    use storage::{SinkStore, Storage};
+
+    #[test]
+    fn test_payload_from_ref() {
+        let id = "payload-test-id";
+        let ref_type = "asset";
+
+        let mut map = Map::new();
+        map.insert("id".to_string(), Json::String(id.to_string()));
+        map.insert("type".to_string(), Json::String(ref_type.to_string()));
+
+        assert_eq!(Payload::new(map),
+                   Payload::from_ref(&Ref::new(id.to_string(),
+                                               Json::Object(Map::new()),
+                                               ref_type.to_string(),
+                                               "http://0.0.0.0".to_string())))
+    }
+
+    #[test]
+    fn test_invalid_object_attributes() {
+        let obj_id = "obj-test-id".to_string();
+        let obj_type = "asset".to_string();
+        let obj_links = Json::Object(Map::new());
+        let store = Arc::new(SinkStore::new(None).unwrap());
+
+        let json_types = vec![Json::Null,
+                              Json::Bool(true),
+                              Json::String("attr".to_string()),
+                              Json::Array(vec![])]
+            .into_iter();
+
+        for json_type in json_types {
+            let obj = Object::new(obj_id.clone(),
+                                  json_type,
+                                  obj_type.clone(),
+                                  obj_links.clone());
+            assert_eq!(Payload::from_object(&obj, &store), None);
+        }
     }
 }

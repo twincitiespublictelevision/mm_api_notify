@@ -1,7 +1,5 @@
 //! # mm_api_import
 
-#![deny(missing_docs)]
-
 extern crate app_dirs;
 #[macro_use]
 extern crate bson;
@@ -13,6 +11,7 @@ extern crate rayon;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
 extern crate serde_json;
 
 mod api;
@@ -38,7 +37,7 @@ use error::{IngestError, IngestResult};
 use objects::Collection;
 use objects::Importable;
 use runtime::Runtime;
-use storage::Store;
+use storage::{MongoStore, Storage};
 use types::{RunResult, ThreadedAPI, ThreadedStore};
 
 ///
@@ -146,7 +145,7 @@ fn main() {
 }
 
 fn get_store(config: &DBConfig) -> ThreadedStore {
-    Arc::new(Store::new(config).expect("Failed to connect to storage"))
+    Arc::new(MongoStore::new(Some(config)).expect("Failed to connect to storage"))
 }
 
 fn get_api_client(config: &MMConfig) -> ThreadedAPI {

@@ -9,26 +9,29 @@ use mongodb::coll::options::{FindOptions, FindOneAndUpdateOptions};
 use config::DBConfig;
 use objects::{Object, utils};
 use storage::error::{StoreError, StoreResult};
+use storage::storage::Storage;
 
-pub struct Store {
+pub struct MongoStore {
     db: Database,
 }
 
-impl Store {
-    pub fn new(config: &DBConfig) -> StoreResult<Store> {
+impl Storage<Object> for MongoStore {
+    fn new(config: Option<&DBConfig>) -> StoreResult<MongoStore> {
+        config.ok_or(StoreError::ConfigError).and_then(|conf| {
 
-        // Set up the database connection.
-        Client::connect(config.host.as_str(), config.port)
-            .or_else(|_| Err(StoreError::InitializationError))
-            .and_then(|client| Ok(client.db(config.name.as_str())))
-            .and_then(|db| {
-                db.auth(config.username.as_str(), config.password.as_str())
-                    .or_else(|_| Err(StoreError::AuthorizationError))
-                    .and_then(|_| Ok(Store { db: db }))
-            })
+            // Set up the database connection.
+            Client::connect(conf.host.as_str(), conf.port)
+                .or_else(|_| Err(StoreError::InitializationError))
+                .and_then(|client| Ok(client.db(conf.name.as_str())))
+                .and_then(|db| {
+                    db.auth(conf.username.as_str(), conf.password.as_str())
+                        .or_else(|_| Err(StoreError::AuthorizationError))
+                        .and_then(|_| Ok(MongoStore { db: db }))
+                })
+        })
     }
 
-    pub fn get(&self, id: &str, obj_type: &str) -> Option<Object> {
+    fn get(&self, id: &str, obj_type: &str) -> Option<Object> {
         let query = doc!{
             "_id" => id
         };
@@ -43,10 +46,10 @@ impl Store {
         })
     }
 
-    pub fn put(&self, object: &Object) -> StoreResult<Object> {
-        object.as_document().map_err(StoreError::InvalidObjectError).and_then(|doc| {
-            let coll = self.db.collection(object.object_type.as_str());
-            let id = object.id.as_str();
+    fn put(&self, item: &Object) -> StoreResult<Object> {
+        item.as_document().map_err(StoreError::InvalidItemError).and_then(|doc| {
+            let coll = self.db.collection(item.object_type.as_str());
+            let id = item.id.as_str();
 
             let filter = doc! {
                 "_id" => id
@@ -56,18 +59,17 @@ impl Store {
             options.upsert = true;
 
             coll.find_one_and_replace(filter, doc, Some(options))
-                .map_err(StoreError::StorageWriteError)
+                .map_err(|_| StoreError::StorageWriteError)
                 .and_then(|opt| match opt {
                     Some(doc) => {
-                        Object::from_bson(Bson::Document(doc))
-                            .map_err(StoreError::InvalidObjectError)
+                        Object::from_bson(Bson::Document(doc)).map_err(StoreError::InvalidItemError)
                     }
                     None => Err(StoreError::StorageFindError),
                 })
         })
     }
 
-    pub fn updated_at(&self) -> Option<i64> {
+    fn updated_at(&self) -> Option<i64> {
         let collections = vec!["asset", "episode", "season", "show", "special"];
 
         collections.iter()

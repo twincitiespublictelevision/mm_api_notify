@@ -1,4 +1,8 @@
 mod error;
-mod store;
+mod mongo;
+mod sink;
+mod storage;
 
-pub use self::store::Store;
+pub use self::mongo::MongoStore;
+pub use self::sink::SinkStore;
+pub use self::storage::Storage;

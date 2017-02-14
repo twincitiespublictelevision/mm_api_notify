@@ -32,8 +32,3 @@ git = "ssh://git@github.com/twincitiespublictelevision/mm_client.git"
 default-features = false
 features = ["serde"]
 version = "0.2.1"
-
-[profile]
-
-[profile.release]
-debug = true
