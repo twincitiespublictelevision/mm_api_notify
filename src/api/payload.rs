@@ -5,14 +5,10 @@ use serde_json::Map;
 use serde_json::Value as Json;
 use serde_json::value::ToJson;
 
-use std::sync::Arc;
-
 use api::Emitter;
 use config::Config;
-use objects::Object;
-use objects::Ref;
-use types::ThreadedStore;
-use storage::Storage;
+use objects::{Object, Ref};
+use types::StorageEngine;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Payload {
@@ -31,7 +27,7 @@ impl Payload {
         Payload::new(data)
     }
 
-    pub fn from_object<T: Storage<Object>>(object: &Object, store: &Arc<T>) -> Option<Payload> {
+    pub fn from_object<T: StorageEngine>(object: &Object, store: &T) -> Option<Payload> {
         if let Json::Object(mut data) = object.attributes.clone() {
             data.insert("id".to_string(), Json::String(object.id.clone()));
             data.insert("type".to_string(), Json::String(object.object_type.clone()));
@@ -63,12 +59,8 @@ impl Payload {
 mod tests {
     use serde_json::Map;
     use serde_json::Value as Json;
-    use serde_json::value::ToJson;
-
-    use std::sync::Arc;
 
     use api::payload::Payload;
-    use config::DBConfig;
     use objects::{Object, Ref};
     use storage::{SinkStore, Storage};
 
@@ -93,7 +85,7 @@ mod tests {
         let obj_id = "obj-test-id".to_string();
         let obj_type = "asset".to_string();
         let obj_links = Json::Object(Map::new());
-        let store = Arc::new(SinkStore::new(None).unwrap());
+        let store = SinkStore::new(None).unwrap();
 
         let json_types = vec![Json::Null,
                               Json::Bool(true),

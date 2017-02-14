@@ -9,7 +9,6 @@ use self::rayon::prelude::*;
 use self::serde_json::Value as Json;
 
 use std::fmt;
-use std::sync::Arc;
 
 use api::Payload;
 use error::IngestResult;
@@ -19,8 +18,7 @@ use objects::Importable;
 use objects::Ref;
 use objects::utils;
 use runtime::Runtime;
-use types::{ImportResult, ThreadedAPI, ThreadedStore};
-use storage::Storage;
+use types::{ImportResult, StorageEngine, ThreadedAPI};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Object {
@@ -42,7 +40,7 @@ impl Object {
         }
     }
 
-    pub fn parent<T: Storage<Object>>(&self, store: &Arc<T>) -> Option<Object> {
+    pub fn parent<T: StorageEngine>(&self, store: &T) -> Option<Object> {
         vec!["episode", "season", "special", "show", "franchise"]
             .iter()
             .filter_map(|parent_type| {
@@ -77,7 +75,11 @@ impl Object {
         bson::to_bson(&self).map(utils::map_string_to_bson_dates)
     }
 
-    fn import_children(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
+    fn import_children<T: StorageEngine>(&self,
+                                         runtime: &Runtime<T>,
+                                         follow_refs: bool,
+                                         since: i64)
+                                         -> ImportResult {
 
         vec!["assets", "episodes", "seasons", "shows", "specials"]
             .par_iter()
@@ -105,7 +107,11 @@ impl Object {
 impl Importable for Object {
     type Value = Object;
 
-    fn import(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
+    fn import<T: StorageEngine>(&self,
+                                runtime: &Runtime<T>,
+                                follow_refs: bool,
+                                since: i64)
+                                -> ImportResult {
 
         if runtime.verbose {
             println!("Importing {} {} {}",

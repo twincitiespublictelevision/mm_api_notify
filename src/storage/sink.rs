@@ -7,15 +7,15 @@ use storage::storage::Storage;
 pub struct SinkStore {}
 
 impl Storage<Object> for SinkStore {
-    fn new(config: Option<&DBConfig>) -> StoreResult<SinkStore> {
+    fn new(_: Option<&DBConfig>) -> StoreResult<SinkStore> {
         Ok(SinkStore {})
     }
 
-    fn get(&self, id: &str, obj_type: &str) -> Option<Object> {
+    fn get(&self, _: &str, _: &str) -> Option<Object> {
         None
     }
 
-    fn put(&self, item: &Object) -> StoreResult<Object> {
+    fn put(&self, _: &Object) -> StoreResult<Object> {
         Err(StoreError::StorageWriteError)
     }
 

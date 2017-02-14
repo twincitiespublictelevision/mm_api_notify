@@ -13,8 +13,7 @@ use objects::import::Importable;
 use objects::reference::Ref;
 use objects::utils;
 use runtime::Runtime;
-use types::ImportResult;
-use types::ThreadedAPI;
+use types::{ImportResult, StorageEngine, ThreadedAPI};
 
 #[derive(Debug, PartialEq)]
 pub struct Collection {
@@ -44,7 +43,11 @@ impl Collection {
         }
     }
 
-    fn import_page(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
+    fn import_page<T: StorageEngine>(&self,
+                                     runtime: &Runtime<T>,
+                                     follow_refs: bool,
+                                     since: i64)
+                                     -> ImportResult {
         self.page
             .par_iter()
             .map(|item| item.import(runtime, follow_refs, since))
@@ -55,7 +58,11 @@ impl Collection {
 impl Importable for Collection {
     type Value = Collection;
 
-    fn import(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
+    fn import<T: StorageEngine>(&self,
+                                runtime: &Runtime<T>,
+                                follow_refs: bool,
+                                since: i64)
+                                -> ImportResult {
 
         let num_pages = (self.total as f64 / self.page_size as f64).ceil() as usize + 1;
 

@@ -7,10 +7,11 @@ use mm_client::Client;
 use std::sync::Arc;
 
 use objects::Object;
-use storage::{MongoStore, Storage};
+use storage::Storage;
 
 pub type ImportResult = (i64, i64);
 pub type RunResult = (Duration, ImportResult);
-pub type Store<T: Storage<Object>> = T;
-pub type ThreadedStore = Arc<Store<MongoStore>>;
 pub type ThreadedAPI = Arc<Client>;
+
+pub trait StorageEngine: Storage<Object> + Sync {}
+impl<T: Storage<Object> + Sync> StorageEngine for T {}

@@ -34,11 +34,10 @@ use std::sync::Arc;
 
 use config::{DBConfig, MMConfig, parse_config};
 use error::{IngestError, IngestResult};
-use objects::Collection;
-use objects::Importable;
+use objects::{Collection, Importable};
 use runtime::Runtime;
 use storage::{MongoStore, Storage};
-use types::{RunResult, ThreadedAPI, ThreadedStore};
+use types::{RunResult, StorageEngine, ThreadedAPI};
 
 ///
 /// Starts processing
@@ -144,8 +143,8 @@ fn main() {
         });
 }
 
-fn get_store(config: &DBConfig) -> ThreadedStore {
-    Arc::new(MongoStore::new(Some(config)).expect("Failed to connect to storage"))
+fn get_store(config: &DBConfig) -> MongoStore {
+    MongoStore::new(Some(config)).expect("Failed to connect to storage")
 }
 
 fn get_api_client(config: &MMConfig) -> ThreadedAPI {
@@ -153,7 +152,9 @@ fn get_api_client(config: &MMConfig) -> ThreadedAPI {
         .expect("Failed to initalize network client"))
 }
 
-fn run_build(runtime: &Runtime, run_start_time: i64) -> IngestResult<RunResult> {
+fn run_build<T: StorageEngine>(runtime: &Runtime<T>,
+                               run_start_time: i64)
+                               -> IngestResult<RunResult> {
 
     println!("Starting build run from {} : {}",
              run_start_time,
@@ -179,7 +180,7 @@ fn compute_update_start_time(last_updated_at: Option<i64>, max_timespan: i64) ->
     }
 }
 
-fn run_update_loop(runtime: &Runtime, run_start_time: i64, delta: i64) {
+fn run_update_loop<T: StorageEngine>(runtime: &Runtime<T>, run_start_time: i64, delta: i64) {
     let mut import_start_time = run_start_time;
     let mut import_completion_time = UTC::now().timestamp();
     let mut next_run_time = run_start_time;
@@ -204,7 +205,9 @@ fn run_update_loop(runtime: &Runtime, run_start_time: i64, delta: i64) {
     }
 }
 
-fn run_update(runtime: &Runtime, run_start_time: i64) -> IngestResult<RunResult> {
+fn run_update<T: StorageEngine>(runtime: &Runtime<T>,
+                                run_start_time: i64)
+                                -> IngestResult<RunResult> {
 
     let date_string = NaiveDateTime::from_timestamp(run_start_time, 0)
         .format("%Y-%m-%dT%H:%M:%S")
@@ -215,10 +218,10 @@ fn run_update(runtime: &Runtime, run_start_time: i64) -> IngestResult<RunResult>
                     run_start_time)
 }
 
-fn import_response(response: MMCResult<String>,
-                   runtime: &Runtime,
-                   run_start_time: i64)
-                   -> IngestResult<RunResult> {
+fn import_response<T: StorageEngine>(response: MMCResult<String>,
+                                     runtime: &Runtime<T>,
+                                     run_start_time: i64)
+                                     -> IngestResult<RunResult> {
     let start_time = UTC::now();
 
     let collection = match response {

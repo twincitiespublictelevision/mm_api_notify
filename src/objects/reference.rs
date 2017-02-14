@@ -12,7 +12,7 @@ use objects::import::Importable;
 use objects::object::Object;
 use objects::utils;
 use runtime::Runtime;
-use types::ImportResult;
+use types::{ImportResult, StorageEngine};
 
 #[derive(Debug, PartialEq)]
 pub struct Ref {
@@ -46,7 +46,11 @@ impl Ref {
         }
     }
 
-    fn import_general(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
+    fn import_general<T: StorageEngine>(&self,
+                                        runtime: &Runtime<T>,
+                                        follow_refs: bool,
+                                        since: i64)
+                                        -> ImportResult {
 
         let res = utils::parse_response(runtime.api.url(self.self_url.as_str()))
             .and_then(|json| Object::from_json(&json))
@@ -59,11 +63,11 @@ impl Ref {
         res.unwrap_or((0, 1))
     }
 
-    fn import_changelog(&self,
-                        runtime: &Runtime,
-                        since: i64,
-                        action: ImportAction)
-                        -> ImportResult {
+    fn import_changelog<T: StorageEngine>(&self,
+                                          runtime: &Runtime<T>,
+                                          since: i64,
+                                          action: ImportAction)
+                                          -> ImportResult {
         match action {
             ImportAction::Delete => {
                 if runtime.config.enable_hooks {
@@ -80,7 +84,11 @@ impl Ref {
 impl Importable for Ref {
     type Value = Ref;
 
-    fn import(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
+    fn import<T: StorageEngine>(&self,
+                                runtime: &Runtime<T>,
+                                follow_refs: bool,
+                                since: i64)
+                                -> ImportResult {
 
         // When importing a reference we branch based on an inspection of the attributes. If this
         // a changelog reference then we prefer to use a custom import.
