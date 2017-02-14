@@ -43,8 +43,8 @@ impl Store {
         })
     }
 
-    pub fn put(&self, object: &Object) -> Option<Object> {
-        object.as_document().ok().and_then(|doc| {
+    pub fn put(&self, object: &Object) -> StoreResult<Object> {
+        object.as_document().map_err(StoreError::InvalidObjectError).and_then(|doc| {
             let coll = self.db.collection(object.object_type.as_str());
             let id = object.id.as_str();
 
@@ -55,12 +55,15 @@ impl Store {
             let mut options = FindOneAndUpdateOptions::new();
             options.upsert = true;
 
-            let res = coll.find_one_and_replace(filter, doc, Some(options));
-
-            match res {
-                Ok(Some(doc)) => Object::from_bson(Bson::Document(doc)),
-                _ => None,
-            }
+            coll.find_one_and_replace(filter, doc, Some(options))
+                .map_err(StoreError::StorageWriteError)
+                .and_then(|opt| match opt {
+                    Some(doc) => {
+                        Object::from_bson(Bson::Document(doc))
+                            .map_err(StoreError::InvalidObjectError)
+                    }
+                    None => Err(StoreError::StorageFindError),
+                })
         })
     }
 

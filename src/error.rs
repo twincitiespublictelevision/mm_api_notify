@@ -7,7 +7,7 @@ use std::error::Error;
 use std::result::Result;
 use std::fmt;
 
-use self::bson::EncoderError;
+use self::bson::{DecoderError, EncoderError};
 use self::mm_client::MMCError;
 use self::rayon::InitError;
 use self::serde_json::error::Error as ParserError;
@@ -21,6 +21,7 @@ pub enum IngestError {
     API(MMCError),
     Parse(ParserError),
     Serialize(EncoderError),
+    Deserialize(DecoderError),
     InvalidDocumentDataError,
     InvalidObjDataError,
     InvalidRefDataError,
@@ -38,6 +39,7 @@ impl fmt::Display for IngestError {
             IngestError::API(ref err) => err.fmt(f),
             IngestError::Parse(ref err) => err.fmt(f),
             IngestError::Serialize(ref err) => err.fmt(f),
+            IngestError::Deserialize(ref err) => err.fmt(f),
             _ => write!(f, ""),
         }
     }
@@ -54,6 +56,7 @@ impl Error for IngestError {
             IngestError::API(ref err) => err.description(),
             IngestError::Parse(ref err) => err.description(),
             IngestError::Serialize(ref err) => err.description(),
+            IngestError::Deserialize(ref err) => err.description(),
             _ => "",
         }
     }
@@ -64,6 +67,7 @@ impl Error for IngestError {
             IngestError::API(ref err) => Some(err),
             IngestError::Parse(ref err) => Some(err),
             IngestError::Serialize(ref err) => Some(err),
+            IngestError::Deserialize(ref err) => Some(err),
             _ => None,
         }
     }
@@ -90,5 +94,11 @@ impl From<ParserError> for IngestError {
 impl From<EncoderError> for IngestError {
     fn from(err: EncoderError) -> IngestError {
         IngestError::Serialize(err)
+    }
+}
+
+impl From<DecoderError> for IngestError {
+    fn from(err: DecoderError) -> IngestError {
+        IngestError::Deserialize(err)
     }
 }

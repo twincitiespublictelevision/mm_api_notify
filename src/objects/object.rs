@@ -53,8 +53,8 @@ impl Object {
             .pop()
     }
 
-    pub fn from_bson(bson: Bson) -> Option<Object> {
-        bson::from_bson(utils::map_bson_dates_to_string(bson)).ok()
+    pub fn from_bson(bson: Bson) -> IngestResult<Object> {
+        bson::from_bson(utils::map_bson_dates_to_string(bson)).map_err(IngestError::Deserialize)
     }
 
     pub fn as_document(&self) -> IngestResult<Document> {
@@ -125,12 +125,12 @@ impl Importable for Object {
 
             let res = runtime.store.put(self);
 
-            if res.is_some() && runtime.config.enable_hooks {
+            if res.is_ok() && runtime.config.enable_hooks {
                 Payload::from_object(self, &runtime.store)
                     .and_then(|payload| Some(payload.emitter(&runtime.config).update()));
             }
 
-            res.map_or_else(|| (0, 1), |_| (1, 0))
+            res.ok().map_or_else(|| (0, 1), |_| (1, 0))
         } else {
             (0, 0)
         };
