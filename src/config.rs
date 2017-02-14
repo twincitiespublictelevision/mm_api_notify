@@ -42,7 +42,7 @@ pub fn parse_config(path: &str) -> Option<Config> {
 
     let mut file = match File::open(path) {
         Ok(file) => file,
-        Err(err) => {
+        Err(_) => {
             println!("Error: Could not find config file (config.toml) at {}",
                      path);
             return None;

@@ -2,9 +2,9 @@ mod collection;
 mod import;
 mod object;
 mod reference;
-mod utils;
+pub mod utils;
 
-pub use objects::collection::Collection;
-pub use objects::import::Importable;
-pub use objects::object::Object;
-pub use objects::reference::Ref;
+pub use self::collection::Collection;
+pub use self::import::Importable;
+pub use self::object::Object;
+pub use self::reference::Ref;

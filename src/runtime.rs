@@ -1,13 +1,9 @@
-extern crate mongodb;
-
-use mongodb::db::{Database, ThreadedDatabase};
-
 use config::Config;
-use types::ThreadedAPI;
+use types::{ThreadedAPI, ThreadedStore};
 
 pub struct Runtime {
     pub api: ThreadedAPI,
     pub config: Config,
-    pub db: Database,
+    pub store: ThreadedStore,
     pub verbose: bool,
 }

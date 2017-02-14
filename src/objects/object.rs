@@ -1,14 +1,10 @@
 extern crate bson;
 extern crate chrono;
-extern crate mongodb;
 extern crate rayon;
 extern crate serde_json;
 
-use self::bson::Bson;
-use self::bson::Document;
+use self::bson::{Bson, Document};
 use self::chrono::{DateTime, UTC};
-use self::mongodb::db::{Database, ThreadedDatabase};
-use self::mongodb::coll::options::FindOneAndUpdateOptions;
 use self::rayon::prelude::*;
 use self::serde_json::Value as Json;
 
@@ -22,8 +18,7 @@ use objects::Importable;
 use objects::Ref;
 use objects::utils;
 use runtime::Runtime;
-use types::ImportResult;
-use types::ThreadedAPI;
+use types::{ImportResult, ThreadedAPI, ThreadedStore};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Object {
@@ -45,32 +40,39 @@ impl Object {
         }
     }
 
-    pub fn parent(&self, db: &Database) -> Option<Object> {
+    pub fn parent(&self, store: &ThreadedStore) -> Option<Object> {
         vec!["episode", "season", "special", "show", "franchise"]
             .iter()
             .filter_map(|parent_type| {
                 self.attributes.lookup(parent_type).and_then(|parent| Ref::from_json(parent).ok())
             })
             .filter_map(|parent_ref| {
-                Object::lookup(parent_ref.id.as_str(), parent_ref.ref_type.as_str(), db)
+                store.get(parent_ref.id.as_str(), parent_ref.ref_type.as_str())
             })
             .collect::<Vec<Object>>()
             .pop()
     }
 
-    fn lookup(id: &str, item_type: &str, db: &Database) -> Option<Object> {
-        let query = doc!{
-            "_id" => id
-        };
+    pub fn from_bson(bson: Bson) -> Option<Object> {
+        bson::from_bson(utils::map_bson_dates_to_string(bson)).ok()
+    }
 
-        let coll = db.collection(item_type);
+    pub fn as_document(&self) -> IngestResult<Document> {
 
-        coll.find(Some(query), None).ok().and_then(|mut cursor| match cursor.next() {
-            Some(Ok(doc)) => {
-                bson::from_bson(utils::map_bson_dates_to_string(Bson::Document(doc))).ok()
+        match self.as_bson() {
+            Ok(serialized) => {
+                if let bson::Bson::Document(document) = serialized {
+                    Ok(document)
+                } else {
+                    Err(IngestError::InvalidDocumentDataError)
+                }
             }
-            _ => None,
-        })
+            Err(err) => Err(IngestError::Serialize(err)),
+        }
+    }
+
+    fn as_bson(&self) -> bson::EncoderResult<Bson> {
+        bson::to_bson(&self).map(utils::map_string_to_bson_dates)
     }
 
     fn import_children(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
@@ -96,24 +98,6 @@ impl Object {
             .and_then(|api_json| Collection::from_json(&api_json))
             .ok()
     }
-
-    fn as_bson(&self) -> bson::EncoderResult<Bson> {
-        bson::to_bson(&self).map(utils::map_string_to_bson_dates)
-    }
-
-    fn as_document(&self) -> IngestResult<Document> {
-
-        match self.as_bson() {
-            Ok(serialized) => {
-                if let bson::Bson::Document(document) = serialized {
-                    Ok(document)
-                } else {
-                    Err(IngestError::InvalidDocumentDataError)
-                }
-            }
-            Err(err) => Err(IngestError::Serialize(err)),
-        }
-    }
 }
 
 impl Importable for Object {
@@ -121,7 +105,7 @@ impl Importable for Object {
 
     fn import(&self, runtime: &Runtime, follow_refs: bool, since: i64) -> ImportResult {
 
-        if (runtime.verbose) {
+        if runtime.verbose {
             println!("Importing {} {} {}",
                      self.id,
                      self.object_type,
@@ -138,33 +122,15 @@ impl Importable for Object {
         // Check the updated_at date to determine if the db needs to
         // update this object
         let mut update_result = if updated_at_time >= since {
-            let res = match self.as_document() {
-                Ok(doc) => {
 
-                    let coll = runtime.db.collection(self.object_type.as_str());
-                    let id = self.id.as_str();
+            let res = runtime.store.put(self);
 
-                    let filter = doc! {
-                            "_id" => id
-                        };
-
-                    let mut options = FindOneAndUpdateOptions::new();
-                    options.upsert = true;
-
-                    match coll.find_one_and_replace(filter, doc, Some(options)) {
-                        Ok(_) => (1, 0),
-                        Err(_) => (0, 1),
-                    }
-                }
-                Err(_) => (0, 1),
-            };
-
-            if runtime.config.enable_hooks {
-                Payload::from_object(self, &runtime.db)
+            if res.is_some() && runtime.config.enable_hooks {
+                Payload::from_object(self, &runtime.store)
                     .and_then(|payload| Some(payload.emitter(&runtime.config).update()));
             }
 
-            res
+            res.map_or_else(|| (0, 1), |_| (1, 0))
         } else {
             (0, 0)
         };

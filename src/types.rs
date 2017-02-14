@@ -6,6 +6,9 @@ use mm_client::Client;
 
 use std::sync::Arc;
 
-pub type ThreadedAPI = Arc<Client>;
+use storage::Store;
+
 pub type ImportResult = (i64, i64);
 pub type RunResult = (Duration, ImportResult);
+pub type ThreadedStore = Arc<Store>;
+pub type ThreadedAPI = Arc<Client>;

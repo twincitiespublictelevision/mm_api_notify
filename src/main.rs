@@ -1,3 +1,7 @@
+//! # mm_api_import
+
+#![deny(missing_docs)]
+
 extern crate app_dirs;
 #[macro_use]
 extern crate bson;
@@ -16,16 +20,14 @@ mod config;
 mod error;
 mod objects;
 mod runtime;
+mod storage;
 mod types;
 
 use app_dirs::{AppDataType, AppInfo, get_app_dir};
 use clap::{Arg, App};
-use chrono::{DateTime, Duration, NaiveDateTime, TimeZone, UTC};
+use chrono::{Duration, NaiveDateTime, UTC};
 use mm_client::Client as APIClient;
 use mm_client::MMCResult;
-use mongodb::{Client, ThreadedClient};
-use mongodb::db::{Database, ThreadedDatabase};
-use mongodb::coll::options::FindOptions;
 use serde_json::error::Result as JsonResult;
 use serde_json::Value as Json;
 
@@ -36,8 +38,8 @@ use error::{IngestError, IngestResult};
 use objects::Collection;
 use objects::Importable;
 use runtime::Runtime;
-use types::RunResult;
-use types::ThreadedAPI;
+use storage::Store;
+use types::{RunResult, ThreadedAPI, ThreadedStore};
 
 ///
 /// Starts processing
@@ -101,13 +103,13 @@ fn main() {
                     Err(err)
                 })
                 .and_then(|_| {
-                    let db = get_db_connection(&config.db);
+                    let store = get_store(&config.db);
                     let api = get_api_client(&config.mm);
 
                     let runtime = Runtime {
                         api: api,
                         config: config,
-                        db: db,
+                        store: store,
                         verbose: matches.is_present("verbose"),
                     };
 
@@ -127,7 +129,7 @@ fn main() {
 
                         let update_start_time =
                             if time_arg < (now - runtime.config.mm.changelog_max_timespan) {
-                                compute_update_start_time(&runtime.db,
+                                compute_update_start_time(runtime.store.updated_at(),
                                                           runtime.config.mm.changelog_max_timespan)
                             } else {
                                 time_arg + build_res.map_or(0, |(dur, _)| dur.num_seconds())
@@ -143,14 +145,8 @@ fn main() {
         });
 }
 
-fn get_db_connection(config: &DBConfig) -> Database {
-    // // Set up the database connection.
-    let client = Client::connect(config.host.as_str(), config.port)
-        .expect("Failed to initialize MongoDB client.");
-    let db = client.db(config.name.as_str());
-    db.auth(config.username.as_str(), config.password.as_str())
-        .expect("Failed to authorize MongoDB user.");
-    db
+fn get_store(config: &DBConfig) -> ThreadedStore {
+    Arc::new(Store::new(config).expect("Failed to connect to storage"))
 }
 
 fn get_api_client(config: &MMConfig) -> ThreadedAPI {
@@ -170,8 +166,8 @@ fn run_build(runtime: &Runtime, run_start_time: i64) -> IngestResult<RunResult> 
     result
 }
 
-fn compute_update_start_time(db: &Database, max_timespan: i64) -> i64 {
-    let newest_db_timestamp = get_most_recent_update_timestamp(db);
+fn compute_update_start_time(last_updated_at: Option<i64>, max_timespan: i64) -> i64 {
+    let newest_db_timestamp = last_updated_at.unwrap_or(0);
     let now = UTC::now().timestamp();
 
     if newest_db_timestamp < (now - max_timespan) {
@@ -182,48 +178,6 @@ fn compute_update_start_time(db: &Database, max_timespan: i64) -> i64 {
     } else {
         newest_db_timestamp
     }
-}
-
-fn get_most_recent_update_timestamp(db: &Database) -> i64 {
-    get_timestamps_from_db(db)
-        .into_iter()
-        .fold(dawn_of_time(), std::cmp::max)
-        .timestamp()
-}
-
-fn get_timestamps_from_db(db: &Database) -> Vec<DateTime<UTC>> {
-    let collections = vec!["asset", "episode", "season", "show", "special"];
-
-    collections.iter()
-        .filter_map(|coll_name| {
-            let coll = db.collection(coll_name);
-            let mut query_options = FindOptions::new().with_limit(1);
-            query_options.sort = Some(doc! {
-            "attributes.updated_at" => (-1)
-        });
-
-            coll.find(None, Some(query_options))
-                .ok()
-                .and_then(|mut cursor| cursor.next())
-                .and_then(|result| result.ok())
-                .and_then(|mut document| {
-                    document.remove("attributes")
-                        .and_then(|attributes| match attributes {
-                            bson::Bson::Document(mut attr) => {
-                                match attr.remove("updated_at") {
-                                    Some(bson::Bson::UtcDatetime(datetime)) => Some(datetime),
-                                    _ => None,
-                                }
-                            }
-                            _ => None,
-                        })
-                })
-        })
-        .collect::<Vec<DateTime<UTC>>>()
-}
-
-fn dawn_of_time() -> DateTime<UTC> {
-    UTC.ymd(1970, 1, 1).and_hms(0, 0, 0)
 }
 
 fn run_update_loop(runtime: &Runtime, run_start_time: i64, delta: i64) {

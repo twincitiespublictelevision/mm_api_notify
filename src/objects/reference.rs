@@ -1,5 +1,4 @@
 extern crate chrono;
-extern crate mongodb;
 extern crate serde_json;
 
 use self::serde_json::Value as Json;
