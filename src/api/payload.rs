@@ -65,7 +65,7 @@ mod tests {
     use storage::{SinkStore, Storage};
 
     #[test]
-    fn test_payload_from_ref() {
+    fn payload_from_ref() {
         let id = "payload-test-id";
         let ref_type = "asset";
 
@@ -81,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_object_attributes() {
+    fn invalid_object_attributes() {
         let obj_id = "obj-test-id".to_string();
         let obj_type = "asset".to_string();
         let obj_links = Json::Object(Map::new());
@@ -101,4 +101,24 @@ mod tests {
             assert_eq!(Payload::from_object(&obj, &store), None);
         }
     }
+
+    #[test]
+    fn valid_object() {
+        let obj = Object::new("obj-test-id".to_string(),
+                              Json::Object(Map::new()),
+                              "asset".to_string(),
+                              Json::Object(Map::new()));
+        let store = SinkStore::new(None).unwrap();
+
+        let mut data = Map::new();
+        data.insert("id".to_string(), Json::String("obj-test-id".to_string()));
+        data.insert("type".to_string(), Json::String("asset".to_string()));
+        data.insert("parent".to_string(), Json::Null);
+
+        assert_eq!(Payload::from_object(&obj, &store).unwrap(),
+                   Payload::new(data));
+    }
+
+    #[test]
+    fn valid_object_with_parent() {}
 }
