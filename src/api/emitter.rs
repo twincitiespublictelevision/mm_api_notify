@@ -66,3 +66,42 @@ impl<'a, 'b> Emitter<'a, 'b> {
             .unwrap_or(0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn constructs() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn emits_update() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn update_contains_object() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn emits_delete() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn delete_contains_id() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn calls_all_hooks() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn only_calls_hooks_for_type() {
+        unimplemented!()
+    }
+}

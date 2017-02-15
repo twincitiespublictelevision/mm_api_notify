@@ -120,5 +120,12 @@ mod tests {
     }
 
     #[test]
-    fn valid_object_with_parent() {}
+    fn valid_object_with_parent() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn provides_emitter_of_self() {
+        unimplemented!()
+    }
 }
