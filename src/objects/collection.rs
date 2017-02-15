@@ -56,8 +56,6 @@ impl Collection {
 }
 
 impl Importable for Collection {
-    type Value = Collection;
-
     fn import<T: StorageEngine>(&self,
                                 runtime: &Runtime<T>,
                                 follow_refs: bool,

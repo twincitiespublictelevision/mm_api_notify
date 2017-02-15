@@ -82,8 +82,6 @@ impl Ref {
 }
 
 impl Importable for Ref {
-    type Value = Ref;
-
     fn import<T: StorageEngine>(&self,
                                 runtime: &Runtime<T>,
                                 follow_refs: bool,

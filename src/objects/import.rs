@@ -7,12 +7,10 @@ use runtime::Runtime;
 use types::{ImportResult, StorageEngine};
 
 pub trait Importable {
-    type Value;
-
     fn import<T: StorageEngine>(&self,
                                 runtime: &Runtime<T>,
                                 follow_refs: bool,
                                 since: i64)
                                 -> ImportResult;
-    fn from_json(json: &Json) -> IngestResult<Self::Value>;
+    fn from_json(json: &Json) -> IngestResult<Self> where Self: Sized;
 }

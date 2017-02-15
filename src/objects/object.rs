@@ -105,8 +105,6 @@ impl Object {
 }
 
 impl Importable for Object {
-    type Value = Object;
-
     fn import<T: StorageEngine>(&self,
                                 runtime: &Runtime<T>,
                                 follow_refs: bool,
