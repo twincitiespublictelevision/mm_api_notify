@@ -33,7 +33,12 @@ impl Payload {
             data.insert("type".to_string(), Json::String(object.object_type.clone()));
 
             let parent = match object.parent(store) {
-                Some(p) => Payload::from_object(&p, store).map(|payload| payload.data).to_json(),
+                Some(p) => {
+                    Payload::from_object(&p, store)
+                        .map(|payload| payload.data)
+                        .to_json()
+                        .unwrap_or(Json::Null)
+                }
                 None => Json::Null,
             };
             data.insert("parent".to_string(), parent);

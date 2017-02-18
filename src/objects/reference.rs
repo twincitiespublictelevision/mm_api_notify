@@ -90,7 +90,7 @@ impl Importable for Ref {
 
         // When importing a reference we branch based on an inspection of the attributes. If this
         // a changelog reference then we prefer to use a custom import.
-        let action = self.attributes.lookup("action").and_then(|action| action.as_str());
+        let action = self.attributes.get("action").and_then(|action| action.as_str());
 
         match action {
             Some(action_str) => {

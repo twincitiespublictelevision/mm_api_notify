@@ -44,7 +44,7 @@ impl Object {
         vec!["episode", "season", "special", "show", "franchise"]
             .iter()
             .filter_map(|parent_type| {
-                self.attributes.lookup(parent_type).and_then(|parent| Ref::from_json(parent).ok())
+                self.attributes.get(parent_type).and_then(|parent| Ref::from_json(parent).ok())
             })
             .filter_map(|parent_ref| {
                 store.get(parent_ref.id.as_str(), parent_ref.ref_type.as_str())
@@ -94,7 +94,7 @@ impl Object {
     }
 
     fn child_collection(&self, api: &ThreadedAPI, child_type: &str) -> Option<Collection> {
-        let mut url = self.links.find("self").unwrap().as_str().unwrap().to_string();
+        let mut url = self.links.get("self").unwrap().as_str().unwrap().to_string();
 
         url.push_str(child_type);
         url.push('/');
@@ -115,11 +115,11 @@ impl Importable for Object {
             println!("Importing {} {} {}",
                      self.id,
                      self.object_type,
-                     self.attributes.lookup("title").unwrap().as_str().unwrap());
+                     self.attributes.get("title").unwrap().as_str().unwrap());
         }
 
         let updated_at_time = self.attributes
-            .find("updated_at")
+            .get("updated_at")
             .and_then(|update_string| update_string.as_str())
             .and_then(|updated_str| updated_str.parse::<DateTime<UTC>>().ok())
             .and_then(|date| Some(date.timestamp()))
@@ -153,13 +153,13 @@ impl Importable for Object {
 
         let mut source = json.clone();
 
-        let id = source.lookup("data").and_then(|data| {
-            data.lookup("id")
+        let id = source.get("data").and_then(|data| {
+            data.get("id")
                 .and_then(|id| id.as_str().and_then(|id_str| Some(id_str.to_string())))
         });
 
-        let obj_type = source.lookup("data").and_then(|data| {
-            data.lookup("type")
+        let obj_type = source.get("data").and_then(|data| {
+            data.get("type")
                 .and_then(|o_type| o_type.as_str().and_then(|type_str| Some(type_str.to_string())))
         });
 

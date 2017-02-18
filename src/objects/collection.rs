@@ -65,7 +65,7 @@ impl Importable for Collection {
         let num_pages = (self.total as f64 / self.page_size as f64).ceil() as usize + 1;
 
         self.links
-            .lookup("first")
+            .get("first")
             .and_then(|first_url| {
                 first_url.as_str().and_then(|base_url| {
                     Some((1..num_pages)
@@ -151,7 +151,7 @@ mod tests {
 
         let json: serde_json::error::Result<serde_json::Value> = serde_json::from_str(json_str);
         let items: Vec<serde_json::Value> = json.unwrap()
-            .find("data")
+            .get("data")
             .unwrap()
             .as_array()
             .unwrap()

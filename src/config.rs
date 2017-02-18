@@ -4,8 +4,6 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
 
-use self::toml::{Parser, Value};
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     pub db: DBConfig,
@@ -38,12 +36,14 @@ pub struct MMConfig {
 pub type APIConfig = BTreeMap<String, Vec<String>>;
 
 pub fn parse_config(path: &str) -> Option<Config> {
+
     let mut config_toml = String::new();
 
     let mut file = match File::open(path) {
         Ok(file) => file,
         Err(_) => {
-            println!("Error: Could not find config file (config.toml) at {}",
+            println!("Error: Could not find config file (config.toml) at {}. See the included \
+                    config.toml.example for configuration instructions.",
                      path);
             return None;
         }
@@ -52,24 +52,32 @@ pub fn parse_config(path: &str) -> Option<Config> {
     file.read_to_string(&mut config_toml)
         .unwrap_or_else(|err| panic!("Error while reading config: [{}]", err));
 
-    let mut parser = Parser::new(&config_toml);
-    let toml = parser.parse();
+    toml::from_str(&config_toml).ok()
 
-    match toml {
-        None => {
-            for err in &parser.errors {
-                let (loline, locol) = parser.to_linecol(err.lo);
-                let (hiline, hicol) = parser.to_linecol(err.hi);
-                println!("{}:{}:{}-{}:{} error: {}",
-                         path,
-                         loline,
-                         locol,
-                         hiline,
-                         hicol,
-                         err.desc);
-            }
-            panic!("Exiting server");
-        }
-        Some(value) => toml::decode(Value::Table(value)),
-    }
+
+
+    //
+    // file.read_to_string(&mut config_toml)
+    //     .unwrap_or_else(|err| panic!("Error while reading config: [{}]", err));
+    //
+    // let mut parser = Parser::new(&config_toml);
+    // let toml = parser.parse();
+    //
+    // match toml {
+    //     None => {
+    //         for err in &parser.errors {
+    //             let (loline, locol) = parser.to_linecol(err.lo);
+    //             let (hiline, hicol) = parser.to_linecol(err.hi);
+    //             println!("{}:{}:{}-{}:{} error: {}",
+    //                      path,
+    //                      loline,
+    //                      locol,
+    //                      hiline,
+    //                      hicol,
+    //                      err.desc);
+    //         }
+    //         panic!("Exiting server");
+    //     }
+    //     Some(value) => toml::decode(Value::Table(value)),
+    // }
 }

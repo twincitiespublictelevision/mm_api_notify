@@ -56,7 +56,7 @@ impl Storage<Object> for MongoStore {
             };
 
             let mut options = FindOneAndUpdateOptions::new();
-            options.upsert = true;
+            options.upsert = Some(true);
 
             coll.find_one_and_replace(filter, doc, Some(options))
                 .map_err(|_| StoreError::StorageWriteError)
@@ -75,7 +75,8 @@ impl Storage<Object> for MongoStore {
         collections.iter()
             .filter_map(|coll_name| {
                 let coll = self.db.collection(coll_name);
-                let mut query_options = FindOptions::new().with_limit(1);
+                let mut query_options = FindOptions::new();
+                query_options.limit = Some(1);
                 query_options.sort = Some(doc! {
                     "attributes.updated_at" => (-1)
                 });
