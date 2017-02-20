@@ -10,7 +10,7 @@ use self::serde_json::Value as Json;
 
 use std::fmt;
 
-use api::Payload;
+use hooks::Payload;
 use error::IngestResult;
 use error::IngestError;
 use objects::Collection;
@@ -75,11 +75,11 @@ impl Object {
         bson::to_bson(&self).map(utils::map_string_to_bson_dates)
     }
 
-    fn import_children<T: StorageEngine>(&self,
-                                         runtime: &Runtime<T>,
-                                         follow_refs: bool,
-                                         since: i64)
-                                         -> ImportResult {
+    fn import_children<T: StorageEngine, S: ThreadedAPI>(&self,
+                                                         runtime: &Runtime<T, S>,
+                                                         follow_refs: bool,
+                                                         since: i64)
+                                                         -> ImportResult {
 
         vec!["assets", "episodes", "seasons", "shows", "specials"]
             .par_iter()
@@ -93,7 +93,7 @@ impl Object {
             .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2))
     }
 
-    fn child_collection(&self, api: &ThreadedAPI, child_type: &str) -> Option<Collection> {
+    fn child_collection<T: ThreadedAPI>(&self, api: &T, child_type: &str) -> Option<Collection> {
         let mut url = self.links.get("self").unwrap().as_str().unwrap().to_string();
 
         url.push_str(child_type);
@@ -105,11 +105,11 @@ impl Object {
 }
 
 impl Importable for Object {
-    fn import<T: StorageEngine>(&self,
-                                runtime: &Runtime<T>,
-                                follow_refs: bool,
-                                since: i64)
-                                -> ImportResult {
+    fn import<T: StorageEngine, S: ThreadedAPI>(&self,
+                                                runtime: &Runtime<T, S>,
+                                                follow_refs: bool,
+                                                since: i64)
+                                                -> ImportResult {
 
         if runtime.verbose {
             println!("Importing {} {} {}",
@@ -131,9 +131,13 @@ impl Importable for Object {
 
             let res = runtime.store.put(self);
 
-            if res.is_ok() && runtime.config.enable_hooks {
-                Payload::from_object(self, &runtime.store)
-                    .and_then(|payload| Some(payload.emitter(&runtime.config).update()));
+            if res.is_ok() && runtime.config.enable_hooks && runtime.config.hooks.is_some() {
+                Payload::from_object(self, &runtime.store).and_then(|payload| {
+                    Some(match runtime.config.hooks {
+                        Some(ref hooks) => payload.emitter(&hooks).update(),
+                        _ => 0,
+                    })
+                });
             }
 
             res.ok().map_or_else(|| (0, 1), |_| (1, 0))
@@ -184,5 +188,154 @@ impl Importable for Object {
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.attributes.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use bson::{Bson, Document};
+    use chrono::{DateTime, UTC};
+    use serde_json;
+    use serde_json::{Map, Value as Json};
+
+    use error::IngestError;
+    use objects::{Importable, Object};
+
+    #[test]
+    fn translates_from_valid_json() {
+        let test_obj = "{\"data\": {\"id\": \"test-id\", \"attributes\": {\"updated_at\": \
+                         \"2017-01-01T00:00:00Z\"}, \"type\": \"show\"}, \"links\": \
+                         {\"self\": \"http://0.0.0.0/test\"}}";
+
+        let mut attr = Map::new();
+        attr.insert("updated_at".to_string(),
+                    Json::String("2017-01-01T00:00:00Z".to_string()));
+
+        let mut links = Map::new();
+        links.insert("self".to_string(),
+                     Json::String("http://0.0.0.0/test".to_string()));
+
+        let obj = Object::new("test-id".to_string(),
+                              Json::Object(attr),
+                              "show".to_string(),
+                              Json::Object(links));
+
+        assert_eq!(obj,
+                   Object::from_json(&serde_json::from_str(test_obj).unwrap()).unwrap());
+    }
+
+    #[test]
+    fn missing_required_fields_fails() {
+        let missing_id = json!({
+            "data": {
+                "attributes": {
+                    "updated_at": "2017-01-01T00:00:00Z"
+                },
+                "type": "show",
+            },
+            "links": {
+                "self": "http://0.0.0.0/test"
+            }
+        });
+
+        match Object::from_json(&missing_id) {
+            Err(IngestError::InvalidObjDataError) => (),
+            _ => panic!("Object should not be creatable without id"),
+        };
+
+        let missing_attributes = json!({
+            "data": {
+                "id": "test-id",
+                "type": "show",
+            },
+            "links": {
+                "self": "http://0.0.0.0/test"
+            }
+        });
+
+        match Object::from_json(&missing_attributes) {
+            Err(IngestError::InvalidObjDataError) => (),
+            _ => panic!("Object should not be creatable without attributes"),
+        };
+
+        let missing_type = json!({
+            "data": {
+                "id": "test-id",
+                "attributes": {
+                    "updated_at": "2017-01-01T00:00:00Z"
+                },
+            },
+            "links": {
+                "self": "http://0.0.0.0/test"
+            }
+        });
+
+        match Object::from_json(&missing_type) {
+            Err(IngestError::InvalidObjDataError) => (),
+            _ => panic!("Object should not be creatable without type"),
+        };
+
+        let missing_links = json!({
+            "data": {
+                "id": "test-id",
+                "attributes": {
+                    "updated_at": "2017-01-01T00:00:00Z"
+                },
+            },
+            "type": "show",
+        });
+
+        match Object::from_json(&missing_links) {
+            Err(IngestError::InvalidObjDataError) => (),
+            _ => panic!("Object should not be creatable without links"),
+        };
+    }
+
+    #[test]
+    fn as_document_with_datetimes() {
+        let mut attr = Map::new();
+        attr.insert("updated_at".to_string(),
+                    Json::String("2017-01-01T00:00:00Z".to_string()));
+
+        let mut links = Map::new();
+        links.insert("self".to_string(),
+                     Json::String("http://0.0.0.0/test".to_string()));
+
+        let obj = Object::new("test-id".to_string(),
+                              Json::Object(attr),
+                              "show".to_string(),
+                              Json::Object(links));
+
+        let mut attr = Document::new();
+        let updated = Bson::UtcDatetime("2017-01-01T00:00:00Z".parse::<DateTime<UTC>>().unwrap());
+        attr.insert("updated_at".to_string(), updated);
+
+        let mut links = Document::new();
+        links.insert("self".to_string(),
+                     Bson::String("http://0.0.0.0/test".to_string()));
+
+        let mut doc = Document::new();
+        doc.insert("_id".to_string(), Bson::String("test-id".to_string()));
+        doc.insert("attributes".to_string(), attr);
+        doc.insert("type".to_string(), Bson::String("show".to_string()));
+        doc.insert("links".to_string(), links);
+
+        assert_eq!(obj.as_document().unwrap(), doc);
+    }
+
+    #[test]
+    fn gets_parent_from_store() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn emits_update_if_new() {
+        unimplemented!()
+    }
+
+    #[test]
+    fn skips_emit_if_old() {
+        unimplemented!()
     }
 }

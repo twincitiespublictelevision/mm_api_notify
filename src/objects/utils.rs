@@ -5,14 +5,14 @@ extern crate serde_json;
 
 use self::bson::Bson;
 use self::chrono::{DateTime, UTC};
-use mm_client::MMCResult;
 use self::serde_json::Value as Json;
 
+use client::ClientResult;
 use error::IngestResult;
 use error::IngestError;
 
-pub fn parse_response(response: MMCResult<String>) -> IngestResult<Json> {
-    match response.map_err(IngestError::API) {
+pub fn parse_response(response: ClientResult<String>) -> IngestResult<Json> {
+    match response.map_err(IngestError::Client) {
         Ok(json_string) => serde_json::from_str(json_string.as_str()).map_err(IngestError::Parse),
         Err(err) => Err(err),
     }
@@ -67,6 +67,7 @@ mod tests {
     use serde_json::Map;
     use serde_json::Value as Json;
 
+    use client::ClientError;
     use error::IngestError;
     use objects::utils;
 
@@ -124,10 +125,10 @@ mod tests {
 
     #[test]
     fn parse_handles_api_error() {
-        let error = MMCError::ResourceNotFound;
+        let error = ClientError::API(MMCError::ResourceNotFound);
 
         match utils::parse_response(Err(error)) {
-            Err(IngestError::API(MMCError::ResourceNotFound)) => (),
+            Err(IngestError::Client(ClientError::API(MMCError::ResourceNotFound))) => (),
             _ => panic!("Failed to properly handle API error"),
         }
     }

@@ -5,8 +5,8 @@ use serde_json::Map;
 use serde_json::Value as Json;
 use serde_json::value::ToJson;
 
-use api::Emitter;
-use config::Config;
+use hooks::Emitter;
+use config::HookConfig;
 use objects::{Object, Ref};
 use types::StorageEngine;
 
@@ -55,7 +55,7 @@ impl Payload {
         }
     }
 
-    pub fn emitter<'a, 'b>(&'a self, config: &'b Config) -> Emitter<'a, 'b> {
+    pub fn emitter<'a, 'b>(&'a self, config: &'b HookConfig) -> Emitter<'a, 'b> {
         Emitter::new(self, config)
     }
 }
@@ -65,7 +65,7 @@ mod tests {
     use serde_json::Map;
     use serde_json::Value as Json;
 
-    use api::payload::Payload;
+    use hooks::payload::Payload;
     use objects::{Object, Ref};
     use storage::{SinkStore, Storage};
 

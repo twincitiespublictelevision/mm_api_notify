@@ -3,14 +3,15 @@ extern crate mm_client;
 extern crate rayon;
 extern crate serde_json;
 
+use self::bson::{DecoderError, EncoderError};
+use self::rayon::InitError;
+use self::serde_json::error::Error as ParserError;
+
 use std::error::Error;
 use std::result::Result;
 use std::fmt;
 
-use self::bson::{DecoderError, EncoderError};
-use self::mm_client::MMCError;
-use self::rayon::InitError;
-use self::serde_json::error::Error as ParserError;
+use client::ClientError;
 
 pub type IngestResult<T> = Result<T, IngestError>;
 
@@ -18,7 +19,7 @@ pub type IngestResult<T> = Result<T, IngestError>;
 pub enum IngestError {
     InvalidConfig,
     ThreadPool(InitError),
-    API(MMCError),
+    Client(ClientError),
     Parse(ParserError),
     Serialize(EncoderError),
     Deserialize(DecoderError),
@@ -36,7 +37,7 @@ impl fmt::Display for IngestError {
                         misspelled or missing property.")
             }
             IngestError::ThreadPool(ref err) => err.fmt(f),
-            IngestError::API(ref err) => err.fmt(f),
+            IngestError::Client(ref err) => err.fmt(f),
             IngestError::Parse(ref err) => err.fmt(f),
             IngestError::Serialize(ref err) => err.fmt(f),
             IngestError::Deserialize(ref err) => err.fmt(f),
@@ -53,7 +54,7 @@ impl Error for IngestError {
                  missing property."
             }
             IngestError::ThreadPool(ref err) => err.description(),
-            IngestError::API(ref err) => err.description(),
+            IngestError::Client(ref err) => err.description(),
             IngestError::Parse(ref err) => err.description(),
             IngestError::Serialize(ref err) => err.description(),
             IngestError::Deserialize(ref err) => err.description(),
@@ -64,7 +65,7 @@ impl Error for IngestError {
     fn cause(&self) -> Option<&Error> {
         match *self {
             IngestError::ThreadPool(ref err) => Some(err),
-            IngestError::API(ref err) => Some(err),
+            IngestError::Client(ref err) => Some(err),
             IngestError::Parse(ref err) => Some(err),
             IngestError::Serialize(ref err) => Some(err),
             IngestError::Deserialize(ref err) => Some(err),
@@ -79,9 +80,9 @@ impl From<InitError> for IngestError {
     }
 }
 
-impl From<MMCError> for IngestError {
-    fn from(err: MMCError) -> IngestError {
-        IngestError::API(err)
+impl From<ClientError> for IngestError {
+    fn from(err: ClientError) -> IngestError {
+        IngestError::Client(err)
     }
 }
 

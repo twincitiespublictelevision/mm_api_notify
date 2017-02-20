@@ -14,9 +14,10 @@ extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
 
-mod api;
+mod client;
 mod config;
 mod error;
+mod hooks;
 mod objects;
 mod runtime;
 mod storage;
@@ -25,14 +26,11 @@ mod types;
 use app_dirs::{AppDataType, AppInfo, get_app_dir};
 use clap::{Arg, App};
 use chrono::{Duration, NaiveDateTime, UTC};
-use mm_client::Client as APIClient;
-use mm_client::MMCResult;
 use serde_json::error::Result as JsonResult;
 use serde_json::Value as Json;
 
-use std::sync::Arc;
-
-use config::{DBConfig, MMConfig, parse_config};
+use client::{APIClient, ClientResult, MMClient};
+use config::{DBConfig, APIConfig, parse_config};
 use error::{IngestError, IngestResult};
 use objects::{Collection, Importable};
 use runtime::Runtime;
@@ -147,20 +145,19 @@ fn get_store(config: &DBConfig) -> MongoStore {
     MongoStore::new(Some(config)).expect("Failed to connect to storage")
 }
 
-fn get_api_client(config: &MMConfig) -> ThreadedAPI {
-    Arc::new(APIClient::staging(config.key.as_str(), config.secret.as_str())
-        .expect("Failed to initalize network client"))
+fn get_api_client(config: &APIConfig) -> MMClient {
+    MMClient::new(Some(config)).expect("Failed to initalize network client")
 }
 
-fn run_build<T: StorageEngine>(runtime: &Runtime<T>,
-                               run_start_time: i64)
-                               -> IngestResult<RunResult> {
+fn run_build<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
+                                               run_start_time: i64)
+                                               -> IngestResult<RunResult> {
 
     println!("Starting build run from {} : {}",
              run_start_time,
              NaiveDateTime::from_timestamp(run_start_time, 0));
 
-    let result = import_response(runtime.api.shows(vec![]), runtime, run_start_time);
+    let result = import_response(runtime.api.all_shows(), runtime, run_start_time);
     print_runtime("Create", &result);
 
     result
@@ -180,7 +177,9 @@ fn compute_update_start_time(last_updated_at: Option<i64>, max_timespan: i64) ->
     }
 }
 
-fn run_update_loop<T: StorageEngine>(runtime: &Runtime<T>, run_start_time: i64, delta: i64) {
+fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
+                                                     run_start_time: i64,
+                                                     delta: i64) {
     let mut import_start_time = run_start_time;
     let mut import_completion_time = UTC::now().timestamp();
     let mut next_run_time = run_start_time;
@@ -205,23 +204,23 @@ fn run_update_loop<T: StorageEngine>(runtime: &Runtime<T>, run_start_time: i64, 
     }
 }
 
-fn run_update<T: StorageEngine>(runtime: &Runtime<T>,
-                                run_start_time: i64)
-                                -> IngestResult<RunResult> {
+fn run_update<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
+                                                run_start_time: i64)
+                                                -> IngestResult<RunResult> {
 
     let date_string = NaiveDateTime::from_timestamp(run_start_time, 0)
         .format("%Y-%m-%dT%H:%M:%S")
         .to_string();
 
-    import_response(runtime.api.changelog(vec![("since", date_string.as_str())]),
+    import_response(runtime.api.changes(date_string.as_str()),
                     runtime,
                     run_start_time)
 }
 
-fn import_response<T: StorageEngine>(response: MMCResult<String>,
-                                     runtime: &Runtime<T>,
-                                     run_start_time: i64)
-                                     -> IngestResult<RunResult> {
+fn import_response<T: StorageEngine, S: ThreadedAPI>(response: ClientResult<String>,
+                                                     runtime: &Runtime<T, S>,
+                                                     run_start_time: i64)
+                                                     -> IngestResult<RunResult> {
     let start_time = UTC::now();
 
     let collection = match response {
@@ -232,7 +231,7 @@ fn import_response<T: StorageEngine>(response: MMCResult<String>,
                 Err(err) => Err(IngestError::Parse(err)),
             }
         }
-        Err(err) => Err(IngestError::API(err)),
+        Err(err) => Err(IngestError::Client(err)),
     };
 
     collection.and_then(|coll| {

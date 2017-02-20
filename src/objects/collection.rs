@@ -33,7 +33,7 @@ impl Collection {
         }
     }
 
-    fn get_collection(&self, api: &ThreadedAPI, url: &str) -> IngestResult<Collection> {
+    fn get_collection<S: ThreadedAPI>(&self, api: &S, url: &str) -> IngestResult<Collection> {
         match utils::parse_response(api.url(url)).and_then(|json| Collection::from_json(&json)) {
             Ok(coll) => Ok(coll),
             Err(err) => {
@@ -43,11 +43,11 @@ impl Collection {
         }
     }
 
-    fn import_page<T: StorageEngine>(&self,
-                                     runtime: &Runtime<T>,
-                                     follow_refs: bool,
-                                     since: i64)
-                                     -> ImportResult {
+    fn import_page<T: StorageEngine, S: ThreadedAPI>(&self,
+                                                     runtime: &Runtime<T, S>,
+                                                     follow_refs: bool,
+                                                     since: i64)
+                                                     -> ImportResult {
         self.page
             .par_iter()
             .map(|item| item.import(runtime, follow_refs, since))
@@ -56,11 +56,11 @@ impl Collection {
 }
 
 impl Importable for Collection {
-    fn import<T: StorageEngine>(&self,
-                                runtime: &Runtime<T>,
-                                follow_refs: bool,
-                                since: i64)
-                                -> ImportResult {
+    fn import<T: StorageEngine, S: ThreadedAPI>(&self,
+                                                runtime: &Runtime<T, S>,
+                                                follow_refs: bool,
+                                                since: i64)
+                                                -> ImportResult {
 
         let num_pages = (self.total as f64 / self.page_size as f64).ceil() as usize + 1;
 
@@ -143,6 +143,7 @@ mod tests {
     use objects::collection::Collection;
     use objects::import::Importable;
     use objects::reference::Ref;
+
     #[test]
     fn test_json_parse() {
         let json_str = "{\"data\":[{\"id\":1,\"attributes\":{},\"type\":\"asset\"},{\"id\":2,\
@@ -165,5 +166,10 @@ mod tests {
         let coll2 = Collection::from_json(&json).unwrap();
 
         assert_eq!(coll1, coll2)
+    }
+
+    #[test]
+    fn import_fetches_all_pages() {
+        unimplemented!()
     }
 }

@@ -7,11 +7,11 @@ use std::io::Read;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     pub db: DBConfig,
-    pub mm: MMConfig,
+    pub mm: APIConfig,
     pub thread_pool_size: usize,
     pub min_runtime_delta: i64,
     pub enable_hooks: bool,
-    pub hooks: Option<APIConfig>,
+    pub hooks: Option<HookConfig>,
 }
 
 // Database configuration/
@@ -26,14 +26,15 @@ pub struct DBConfig {
 
 // MediaManagerAPI configuration
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct MMConfig {
+pub struct APIConfig {
     pub key: String,
     pub secret: String,
+    pub env: Option<String>,
     pub changelog_max_timespan: i64,
 }
 
 // API Webhook configuration
-pub type APIConfig = BTreeMap<String, Vec<String>>;
+pub type HookConfig = BTreeMap<String, Vec<String>>;
 
 pub fn parse_config(path: &str) -> Option<Config> {
 
