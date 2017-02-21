@@ -1,4 +1,6 @@
 //! # mm_api_import
+#[cfg(test)]
+extern crate mockito;
 
 extern crate app_dirs;
 #[macro_use]

@@ -10,7 +10,7 @@ use self::serde_json::Value as Json;
 
 use std::fmt;
 
-use hooks::Payload;
+use hooks::{Emitter, HttpEmitter, Payload};
 use error::IngestResult;
 use error::IngestError;
 use objects::Collection;
@@ -131,16 +131,28 @@ impl Importable for Object {
 
             let res = runtime.store.put(self);
 
-            if res.is_ok() && runtime.config.enable_hooks && runtime.config.hooks.is_some() {
-                Payload::from_object(self, &runtime.store).and_then(|payload| {
-                    Some(match runtime.config.hooks {
-                        Some(ref hooks) => payload.emitter(&hooks).update(),
-                        _ => 0,
-                    })
-                });
-            }
+            print!("{:?}", res.is_ok());
 
-            res.ok().map_or_else(|| (0, 1), |_| (1, 0))
+            let emit_res = if res.is_ok() && runtime.config.enable_hooks &&
+                              runtime.config.hooks.is_some() {
+                Payload::from_object(self, &runtime.store)
+                    .and_then(|payload| {
+                        Some(match runtime.config.hooks {
+                            Some(ref hooks) => {
+                                payload.emitter(&hooks, HttpEmitter::new).update().results()
+                            }
+                            None => (0, 0),
+                        })
+                    })
+                    .unwrap_or((0, 1))
+            } else {
+                (0, 0)
+            };
+
+            let r = res.ok();
+
+            println!("{:?}", r.clone());
+            r.map_or_else(|| (0, 1), |_| emit_res)
         } else {
             (0, 0)
         };
@@ -199,9 +211,48 @@ mod tests {
     use serde_json;
     use serde_json::{Map, Value as Json};
 
+    use std::collections::BTreeMap;
+
+    use client::{APIClient, TestClient};
+    use config::{APIConfig, Config, DBConfig};
     use error::IngestError;
     use objects::{Importable, Object};
+    use runtime::Runtime;
     use storage::{SinkStore, Storage};
+
+    fn void_runtime() -> Runtime<SinkStore, TestClient> {
+        let store = SinkStore::new(None).unwrap();
+        let client = TestClient::new(None).unwrap();
+
+        let empty = "".to_string();
+
+        let config = Config {
+            db: DBConfig {
+                host: empty.clone(),
+                port: 0,
+                name: empty.clone(),
+                username: empty.clone(),
+                password: empty.clone(),
+            },
+            mm: APIConfig {
+                key: empty.clone(),
+                secret: empty.clone(),
+                env: None,
+                changelog_max_timespan: 0,
+            },
+            thread_pool_size: 0,
+            min_runtime_delta: 0,
+            enable_hooks: false,
+            hooks: None,
+        };
+
+        Runtime {
+            api: client,
+            config: config,
+            store: store,
+            verbose: false,
+        }
+    }
 
     #[test]
     fn translates_from_valid_json() {
@@ -362,11 +413,63 @@ mod tests {
 
     #[test]
     fn emits_update_if_new() {
-        unimplemented!()
+        let e = "http://0.0.0.0/".to_string();
+
+        let mut config = BTreeMap::new();
+        config.insert("show".to_string(), vec![e.clone(), e.clone(), e.clone()]);
+
+        let obj_json = json!({
+            "data": {
+                "id": "test-id",
+                "type": "show",
+                "attributes": {
+                    "updated_at": "2017-02-21T20:42:27.010750Z"
+                }
+            },
+            "links": {
+                "self": ""
+            }
+        });
+
+        let mut runtime = void_runtime();
+        runtime.config.enable_hooks = true;
+        runtime.config.hooks = Some(config);
+        runtime.store.set_response(Object::from_json(&obj_json).unwrap());
+
+        let obj = Object::from_json(&obj_json).unwrap();
+        let test_res = obj.import(&runtime, false, 0);
+
+        assert_eq!(test_res, (3, 0))
     }
 
     #[test]
     fn skips_emit_if_old() {
-        unimplemented!()
+        let e = "http://0.0.0.0/".to_string();
+
+        let mut config = BTreeMap::new();
+        config.insert("show".to_string(), vec![e.clone(), e.clone(), e.clone()]);
+
+        let obj_json = json!({
+            "data": {
+                "id": "test-id",
+                "type": "show",
+                "attributes": {
+                    "updated_at": "2017-02-21T20:42:27.010750Z"
+                }
+            },
+            "links": {
+                "self": ""
+            }
+        });
+
+        let mut runtime = void_runtime();
+        runtime.config.enable_hooks = true;
+        runtime.config.hooks = Some(config);
+        runtime.store.set_response(Object::from_json(&obj_json).unwrap());
+
+        let obj = Object::from_json(&obj_json).unwrap();
+        let test_res = obj.import(&runtime, false, UTC::now().timestamp());
+
+        assert_eq!(test_res, (0, 0))
     }
 }

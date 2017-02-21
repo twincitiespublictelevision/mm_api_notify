@@ -5,7 +5,7 @@ use self::serde_json::Value as Json;
 
 use std::fmt;
 
-use hooks::Payload;
+use hooks::{Emitter, HttpEmitter, Payload};
 use error::IngestResult;
 use error::IngestError;
 use objects::import::Importable;
@@ -72,12 +72,17 @@ impl Ref {
             ImportAction::Delete => {
                 if runtime.config.enable_hooks && runtime.config.hooks.is_some() {
                     match runtime.config.hooks {
-                        Some(ref hooks) => Payload::from_ref(self).emitter(&hooks).delete(),
-                        _ => 0,
-                    };
+                        Some(ref hooks) => {
+                            Payload::from_ref(self)
+                                .emitter(&hooks, HttpEmitter::new)
+                                .delete()
+                                .results()
+                        }
+                        None => (0, 0),
+                    }
+                } else {
+                    (0, 0)
                 }
-
-                (0, 0)
             }
             ImportAction::Update => self.import_general(runtime, false, since),
         }
@@ -149,12 +154,48 @@ mod tests {
     use serde_json::Map;
     use serde_json::Value as Json;
 
+    use std::collections::BTreeMap;
+
     use config::{APIConfig, Config, DBConfig};
     use client::{APIClient, TestClient};
     use error::IngestError;
     use objects::{Importable, Ref};
     use storage::{SinkStore, Storage};
     use runtime::Runtime;
+
+    fn void_runtime() -> Runtime<SinkStore, TestClient> {
+        let store = SinkStore::new(None).unwrap();
+        let client = TestClient::new(None).unwrap();
+
+        let empty = "".to_string();
+
+        let config = Config {
+            db: DBConfig {
+                host: empty.clone(),
+                port: 0,
+                name: empty.clone(),
+                username: empty.clone(),
+                password: empty.clone(),
+            },
+            mm: APIConfig {
+                key: empty.clone(),
+                secret: empty.clone(),
+                env: None,
+                changelog_max_timespan: 0,
+            },
+            thread_pool_size: 0,
+            min_runtime_delta: 0,
+            enable_hooks: false,
+            hooks: None,
+        };
+
+        Runtime {
+            api: client,
+            config: config,
+            store: store,
+            verbose: false,
+        }
+    }
 
     #[test]
     fn translates_from_valid_fields() {
@@ -246,39 +287,8 @@ mod tests {
                          \"2017-01-01T00:00:00Z\"}, \"type\": \"show\", \"links\": \
                          {\"self\": \"http://0.0.0.0/test\"}}";
 
-        let store = SinkStore::new(None).unwrap();
-        let mut client = TestClient::new(None).unwrap();
-
-        client.set_response(test_resp.to_string());
-
-        let empty = "".to_string();
-
-        let config = Config {
-            db: DBConfig {
-                host: empty.clone(),
-                port: 0,
-                name: empty.clone(),
-                username: empty.clone(),
-                password: empty.clone(),
-            },
-            mm: APIConfig {
-                key: empty.clone(),
-                secret: empty.clone(),
-                env: None,
-                changelog_max_timespan: 0,
-            },
-            thread_pool_size: 0,
-            min_runtime_delta: 0,
-            enable_hooks: false,
-            hooks: None,
-        };
-
-        let runtime = Runtime {
-            api: client,
-            config: config,
-            store: store,
-            verbose: false,
-        };
+        let mut runtime = void_runtime();
+        runtime.api.set_response(test_resp.to_string());
 
         let test_ref = Ref::new("test-id".to_string(),
                                 Json::Object(Map::new()),
@@ -294,6 +304,30 @@ mod tests {
 
     #[test]
     fn emits_delete() {
-        unimplemented!()
+        let e = "http://0.0.0.0/".to_string();
+
+        let mut config = BTreeMap::new();
+        config.insert("show".to_string(), vec![e.clone(), e.clone(), e.clone()]);
+
+        let ref_json = json!({
+            "id": "test-id",
+            "type": "show",
+            "attributes": {
+                "action": "delete",
+                "timestamp": "2017-02-21T20:42:27.010750Z"
+            },
+            "links": {
+                "self": ""
+            }
+        });
+
+        let mut runtime = void_runtime();
+        runtime.config.enable_hooks = true;
+        runtime.config.hooks = Some(config);
+
+        let refr = Ref::from_json(&ref_json).unwrap();
+        let test_res = refr.import(&runtime, false, 0);
+
+        assert_eq!(test_res, (3, 0))
     }
 }

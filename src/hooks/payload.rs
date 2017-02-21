@@ -52,8 +52,10 @@ impl Payload {
         }
     }
 
-    pub fn emitter<'a, 'b>(&'a self, config: &'b HookConfig) -> Emitter<'a, 'b> {
-        Emitter::new(self, config)
+    pub fn emitter<'a, 'b, T: Emitter<'a, 'b>, F>(&'a self, config: &'b HookConfig, con: F) -> T
+        where F: FnOnce(&'a Payload, &'b HookConfig) -> T
+    {
+        con(self, config)
     }
 }
 
@@ -64,7 +66,7 @@ mod tests {
 
     use std::collections::BTreeMap;
 
-    use hooks::{Emitter, Payload};
+    use hooks::{Emitter, HttpEmitter, Payload};
     use objects::{Importable, Object, Ref};
     use storage::{SinkStore, Storage};
 
@@ -208,9 +210,9 @@ mod tests {
             }
         }) {
             let payload = Payload { data: payload_map };
-            let emit = Emitter::new(&payload, &config);
+            let emit = HttpEmitter::new(&payload, &config);
 
-            let test_emit = payload.emitter(&config);
+            let test_emit = payload.emitter(&config, HttpEmitter::new);
 
             assert_eq!(emit, test_emit);
         } else {

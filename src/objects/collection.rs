@@ -4,7 +4,6 @@ extern crate serde_json;
 use self::rayon::prelude::*;
 use self::serde_json::Value as Json;
 
-use std::cmp::PartialEq;
 use std::fmt;
 
 use error::IngestResult;
@@ -34,13 +33,7 @@ impl Collection {
     }
 
     fn get_collection<S: ThreadedAPI>(&self, api: &S, url: &str) -> IngestResult<Collection> {
-        match utils::parse_response(api.url(url)).and_then(|json| Collection::from_json(&json)) {
-            Ok(coll) => Ok(coll),
-            Err(err) => {
-                // println!("Collection {} failed due to {}", url, err);
-                Err(err)
-            }
-        }
+        utils::parse_response(api.url(url)).and_then(|json| Collection::from_json(&json))
     }
 
     fn import_page<T: StorageEngine, S: ThreadedAPI>(&self,
