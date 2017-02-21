@@ -37,7 +37,7 @@ impl Collection {
         match utils::parse_response(api.url(url)).and_then(|json| Collection::from_json(&json)) {
             Ok(coll) => Ok(coll),
             Err(err) => {
-                println!("Collection {} failed due to {}", url, err);
+                // println!("Collection {} failed due to {}", url, err);
                 Err(err)
             }
         }
@@ -140,9 +140,15 @@ impl fmt::Display for Collection {
 #[cfg(test)]
 mod tests {
     use serde_json;
-    use objects::collection::Collection;
-    use objects::import::Importable;
-    use objects::reference::Ref;
+
+    use std::collections::HashSet;
+    use std::iter::FromIterator;
+
+    use config::{APIConfig, Config, DBConfig};
+    use objects::{Collection, Importable, Ref};
+    use runtime::Runtime;
+    use storage::{SinkStore, Storage};
+    use client::{APIClient, TestClient};
 
     #[test]
     fn test_json_parse() {
@@ -170,6 +176,78 @@ mod tests {
 
     #[test]
     fn import_fetches_all_pages() {
-        unimplemented!()
+        let coll_json = json!({
+            "data": [
+                {
+                    "id": 1,
+                    "attributes": {},
+                    "type": "asset"
+                }
+            ],
+            "links": {
+                "first": "http://0.0.0.0/test"
+            },
+            "meta": {
+                "pagination": {
+                    "per_page": 5,
+                    "count": 25
+                }
+            }
+        });
+
+        let coll = Collection::from_json(&coll_json).unwrap();
+
+        let store = SinkStore::new(None).unwrap();
+        let mut client = TestClient::new(None).unwrap();
+
+        client.set_response("{}".to_string());
+
+        let empty = "".to_string();
+
+        let config = Config {
+            db: DBConfig {
+                host: empty.clone(),
+                port: 0,
+                name: empty.clone(),
+                username: empty.clone(),
+                password: empty.clone(),
+            },
+            mm: APIConfig {
+                key: empty.clone(),
+                secret: empty.clone(),
+                env: None,
+                changelog_max_timespan: 0,
+            },
+            thread_pool_size: 0,
+            min_runtime_delta: 0,
+            enable_hooks: false,
+            hooks: None,
+        };
+
+        let reporter = client.clone();
+
+        let runtime = Runtime {
+            api: client,
+            config: config,
+            store: store,
+            verbose: false,
+        };
+
+        coll.import(&runtime, false, 0);
+
+        let endpoints = vec![
+            "http://0.0.0.0/test?page=1".to_string(),
+            "http://0.0.0.0/test?page=2".to_string(),
+            "http://0.0.0.0/test?page=3".to_string(),
+            "http://0.0.0.0/test?page=4".to_string(),
+            "http://0.0.0.0/test?page=5".to_string()
+        ];
+
+        let endpoints_set: HashSet<String> = HashSet::from_iter(endpoints);
+
+        let reqs = reporter.get_reqs();
+        let test_set: HashSet<String> = HashSet::from_iter(reqs);
+
+        assert_eq!(endpoints_set, test_set);
     }
 }

@@ -8,7 +8,7 @@ use client::client::APIClient;
 use client::error::{ClientError, ClientResult};
 use config::APIConfig;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TestClient {
     response: Option<String>,
     pub reqs: Arc<Mutex<Vec<String>>>,
@@ -17,6 +17,10 @@ pub struct TestClient {
 impl TestClient {
     pub fn set_response(&mut self, response: String) {
         self.response = Some(response)
+    }
+
+    pub fn get_reqs(&self) -> Vec<String> {
+        self.reqs.lock().unwrap().clone()
     }
 }
 
