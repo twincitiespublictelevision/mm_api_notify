@@ -20,7 +20,7 @@ use objects::utils;
 use runtime::Runtime;
 use types::{ImportResult, StorageEngine, ThreadedAPI};
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Object {
     #[serde(rename = "_id")]
     pub id: String,
@@ -201,6 +201,7 @@ mod tests {
 
     use error::IngestError;
     use objects::{Importable, Object};
+    use storage::{SinkStore, Storage};
 
     #[test]
     fn translates_from_valid_json() {
@@ -226,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_required_fields_fails() {
+    fn missing_required_fields_fail() {
         let missing_id = json!({
             "data": {
                 "attributes": {
@@ -326,7 +327,37 @@ mod tests {
 
     #[test]
     fn gets_parent_from_store() {
-        unimplemented!()
+        let parent_obj_resp = "{\"data\": {\"id\": \"test-id\", \"attributes\": {\"updated_at\": \
+                         \"2017-01-01T00:00:00Z\"}, \"type\": \"show\"}, \"links\": \
+                         {\"self\": \"http://0.0.0.0/test\"}}";
+
+        let mut store = SinkStore::new(None).unwrap();
+
+        let parent_obj = Object::from_json(&serde_json::from_str(parent_obj_resp).unwrap())
+            .unwrap();
+
+        store.set_response(parent_obj.clone());
+
+        let attr = json!({
+            "franchise": {
+                "id": "test-ref-id",
+                "type": "franchise",
+                "attributes": {},
+                "links": {
+                    "self": "http://0.0.0.0/ref-test"
+                }
+            }
+        });
+
+        let links = json!({
+            "self": "http://0.0.0.0/test"
+        });
+
+        let test_obj = Object::new("test-id".to_string(), attr, "show".to_string(), links);
+
+        let test_parent = test_obj.parent(&store).unwrap();
+
+        assert_eq!(parent_obj, test_parent);
     }
 
     #[test]

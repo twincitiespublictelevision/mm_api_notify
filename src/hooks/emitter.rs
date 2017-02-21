@@ -5,6 +5,7 @@ use self::reqwest::Method;
 use hooks::Payload;
 use config::HookConfig;
 
+#[derive(Debug, PartialEq)]
 pub struct Emitter<'a, 'b> {
     payload: &'a Payload,
     config: &'b HookConfig,

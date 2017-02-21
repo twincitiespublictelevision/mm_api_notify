@@ -3,14 +3,13 @@ extern crate serde_json;
 
 use serde_json::Map;
 use serde_json::Value as Json;
-use serde_json::value::ToJson;
 
 use hooks::Emitter;
 use config::HookConfig;
 use objects::{Object, Ref};
 use types::StorageEngine;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Payload {
     pub data: Map<String, Json>,
 }
@@ -35,9 +34,7 @@ impl Payload {
             let parent = match object.parent(store) {
                 Some(p) => {
                     Payload::from_object(&p, store)
-                        .map(|payload| payload.data)
-                        .to_json()
-                        .unwrap_or(Json::Null)
+                        .map_or(Json::Null, |payload| Json::Object(payload.data))
                 }
                 None => Json::Null,
             };
@@ -65,8 +62,10 @@ mod tests {
     use serde_json::Map;
     use serde_json::Value as Json;
 
-    use hooks::payload::Payload;
-    use objects::{Object, Ref};
+    use std::collections::BTreeMap;
+
+    use hooks::{Emitter, Payload};
+    use objects::{Importable, Object, Ref};
     use storage::{SinkStore, Storage};
 
     #[test]
@@ -126,11 +125,96 @@ mod tests {
 
     #[test]
     fn valid_object_with_parent() {
-        unimplemented!()
+        let parent_json = json!({
+            "data": {
+                "id": "test-parent",
+                "attributes": {
+                    "updated_at": "2017-01-01T00:00:00Z"
+                },
+                "type": "franchise"
+            },
+            "links": {
+                "self": "http://0.0.0.0/parent"
+            }
+        });
+
+        let parent = Object::from_json(&parent_json).unwrap();
+
+        let mut store = SinkStore::new(None).unwrap();
+        store.set_response(parent);
+
+        let obj_json = json!({
+            "data": {
+                "id": "test-child",
+                "attributes": {
+                    "franchise": {
+                        "id": "test-parent",
+                        "attributes": {
+                            "updated_at": "2017-01-01T00:00:00Z"
+                        },
+                        "type": "franchise",
+                        "links": {
+                            "self": "http://0.0.0.0/parent"
+                        }
+                    },
+                    "updated_at": "2017-01-01T00:00:00Z"
+                },
+                "type": "show"
+            },
+            "links": {
+                "self": "http://0.0.0.0/child"
+            }
+        });
+
+        let obj = Object::from_json(&obj_json).unwrap();
+
+        if let Json::Object(payload_map) =
+            json!({
+            "id": "test-child",
+            "type": "show",
+            "updated_at": "2017-01-01T00:00:00Z",
+            "parent": {
+                "id": "test-parent",
+                "parent": null,
+                "updated_at": "2017-01-01T00:00:00Z",
+                "type": "franchise"
+            }
+        }) {
+
+            let payload = Payload { data: payload_map };
+
+            let test_payload = Payload::from_object(&obj, &store).unwrap();
+
+            assert_eq!(payload, test_payload);
+        } else {
+            panic!("Failed to create payload map");
+        }
     }
 
     #[test]
     fn provides_emitter_of_self() {
-        unimplemented!()
+        let config = BTreeMap::new();
+
+        if let Json::Object(payload_map) =
+            json!({
+            "id": "test-child",
+            "type": "show",
+            "updated_at": "2017-01-01T00:00:00Z",
+            "parent": {
+                "id": "test-parent",
+                "parent": null,
+                "updated_at": "2017-01-01T00:00:00Z",
+                "type": "franchise"
+            }
+        }) {
+            let payload = Payload { data: payload_map };
+            let emit = Emitter::new(&payload, &config);
+
+            let test_emit = payload.emitter(&config);
+
+            assert_eq!(emit, test_emit);
+        } else {
+            panic!("Failed to create payload map");
+        }
     }
 }
