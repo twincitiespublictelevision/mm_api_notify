@@ -29,15 +29,10 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
                 let status = match http_client() {
                     Some(client) => {
                         let resp = match method {
-                                EmitAction::Delete => {
-                                    client.request(Method::Delete, hook)
-                                        .json(&self.payload)
-                                }
-                                EmitAction::Update => {
-                                    client.post(hook)
-                                        .json(&self.payload)
-                                }
+                                EmitAction::Delete => client.request(Method::Delete, hook),
+                                EmitAction::Update => client.post(hook),
                             }
+                            .json(&self.payload)
                             .send();
 
                         resp.ok().map_or_else(|| false, |_| true)

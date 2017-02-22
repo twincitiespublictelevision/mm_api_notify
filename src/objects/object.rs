@@ -131,8 +131,6 @@ impl Importable for Object {
 
             let res = runtime.store.put(self);
 
-            print!("{:?}", res.is_ok());
-
             let emit_res = if res.is_ok() && runtime.config.enable_hooks &&
                               runtime.config.hooks.is_some() {
                 Payload::from_object(self, &runtime.store)
@@ -149,10 +147,7 @@ impl Importable for Object {
                 (0, 0)
             };
 
-            let r = res.ok();
-
-            println!("{:?}", r.clone());
-            r.map_or_else(|| (0, 1), |_| emit_res)
+            res.ok().map_or_else(|| (0, 1), |_| emit_res)
         } else {
             (0, 0)
         };
