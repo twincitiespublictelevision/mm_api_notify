@@ -112,7 +112,8 @@ impl Importable for Object {
                                                 -> ImportResult {
 
         if runtime.verbose {
-            println!("Importing {} {} {}",
+            println!("{:<10} {} {:<10} {}",
+                     "Importing",
                      self.id,
                      self.object_type,
                      self.attributes.get("title").unwrap().as_str().unwrap());

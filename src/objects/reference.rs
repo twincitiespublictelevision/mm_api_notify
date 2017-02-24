@@ -57,7 +57,11 @@ impl Ref {
             .and_then(|obj| Ok(obj.import(runtime, follow_refs, since)));
 
         if runtime.verbose && res.is_err() {
-            println!("Skipping {} {} due to {:?}", self.id, self.ref_type, res);
+            println!("{:<10} {} {:<10} due to {:?}",
+                     "Skipping",
+                     self.id,
+                     self.ref_type,
+                     res);
         }
 
         res.unwrap_or((0, 1))
