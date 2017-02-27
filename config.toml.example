@@ -1,5 +1,6 @@
 thread_pool_size = 8
 min_runtime_delta = 30
+enable_hooks = false
 
 [db]
 host = ""
