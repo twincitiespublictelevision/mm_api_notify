@@ -34,6 +34,7 @@ use serde_json::Value as Json;
 use client::{APIClient, ClientResult, MMClient};
 use config::{DBConfig, APIConfig, parse_config};
 use error::{IngestError, IngestResult};
+use hooks::Payload;
 use objects::{Collection, Importable};
 use runtime::Runtime;
 use storage::{MongoStore, Storage};
@@ -46,27 +47,40 @@ fn main() {
 
     let matches = App::new("Video Ingest")
         .version(env!("CARGO_PKG_VERSION"))
-        .arg(Arg::with_name("build")
-            .short("b")
-            .long("build")
-            .takes_value(false)
-            .help("Performs a full build run prior to entering the update loop"))
         .arg(Arg::with_name("config")
             .short("c")
             .long("config")
             .takes_value(true)
             .help("Path to configuration file"))
+        .arg(Arg::with_name("build")
+            .short("b")
+            .long("build")
+            .takes_value(false)
+            .help("Performs a full build run prior to entering the update loop"))
         .arg(Arg::with_name("skip-update")
             .short("k")
             .long("skip-update")
             .takes_value(false)
             .help("Prevents update loop from running"))
+        .arg(Arg::with_name("start-time")
+            .long("start-time")
+            .short("t")
+            .takes_value(true)
+            .help("Defines the timestamp to start building or updating from"))
         .arg(Arg::with_name("verbose")
             .short("v")
             .long("verbose")
             .takes_value(false)
             .help("Provides feedback on import during processing"))
-        .arg(Arg::with_name("start-time").long("start-time").short("t").takes_value(true))
+        .arg(Arg::with_name("query")
+            .long("query")
+            .short("q")
+            .takes_value(true)
+            .number_of_values(2)
+            .value_names(&["type", "id"])
+            .conflicts_with_all(&["build", "skip-update", "verbose", "start-time"])
+            .help("Queries the cache with a type and id pair and displays the payload that the \
+                   runner will emit"))
         .get_matches();
 
     let config_path = if !matches.is_present("config") {
@@ -88,7 +102,7 @@ fn main() {
         }
         .expect("Failed to run. Unable to parse path to default config location.");
 
-    parse_config(config_path.as_str())
+    let conf_res = parse_config(config_path.as_str())
         .ok_or(IngestError::InvalidConfig)
         .and_then(|config| {
 
@@ -111,36 +125,52 @@ fn main() {
                         verbose: matches.is_present("verbose"),
                     };
 
-                    let time_arg = matches.value_of("start-time").map_or(0, |arg| {
-                        arg.parse::<i64>().expect("Could not parse start time")
-                    });
-
-                    let build_res = if matches.is_present("build") {
-                        run_build(&runtime, time_arg).ok()
+                    if let Some(query) = matches.values_of("query") {
+                        let query_args = query.collect::<Vec<&str>>();
+                        match runtime.store.get(query_args[1], query_args[0]) {
+                            Some(obj) => {
+                                match Payload::from_object(&obj, &runtime.store) {
+                                    Some(payload) => println!("{}", serde_json::to_string_pretty(&payload).unwrap()),
+                                    None => println!("Failed to generate payload from object."),
+                                }
+                            }
+                            None => println!("Could not find the requested object in the cache."),
+                        };
                     } else {
-                        None
-                    };
+                        let time_arg = matches.value_of("start-time").map_or(0, |arg| {
+                            arg.parse::<i64>().expect("Could not parse start time")
+                        });
 
-                    if !matches.is_present("skip-update") {
+                        let build_res = if matches.is_present("build") {
+                            run_build(&runtime, time_arg).ok()
+                        } else {
+                            None
+                        };
 
-                        let now = UTC::now().timestamp();
+                        if !matches.is_present("skip-update") {
 
-                        let update_start_time =
-                            if time_arg < (now - runtime.config.mm.changelog_max_timespan) {
+                            let now = UTC::now().timestamp();
+
+                            let update_start_time = if time_arg <
+                                                       (now -
+                                                        runtime.config.mm.changelog_max_timespan) {
                                 compute_update_start_time(runtime.store.updated_at(),
                                                           runtime.config.mm.changelog_max_timespan)
                             } else {
                                 time_arg + build_res.map_or(0, |(dur, _)| dur.num_seconds())
                             };
 
-                        run_update_loop(&runtime,
-                                        update_start_time,
-                                        runtime.config.min_runtime_delta)
-                    };
+                            run_update_loop(&runtime,
+                                            update_start_time,
+                                            runtime.config.min_runtime_delta)
+                        };
+                    }
 
                     Ok(())
                 })
         });
+
+    conf_res.expect("Failed to parse config.")
 }
 
 fn get_store(config: &DBConfig) -> MongoStore {

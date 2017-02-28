@@ -310,8 +310,12 @@ mod tests {
     fn emits_delete() {
         let e = "http://0.0.0.0/".to_string();
 
+        let mut hook = BTreeMap::new();
+        hook.insert("url".to_string(), e);
+
         let mut config = BTreeMap::new();
-        config.insert("show".to_string(), vec![e.clone(), e.clone(), e.clone()]);
+        config.insert("show".to_string(),
+                      vec![hook.clone(), hook.clone(), hook.clone()]);
 
         let ref_json = json!({
             "id": "test-id",

@@ -1,6 +1,9 @@
 extern crate reqwest;
 
+use self::reqwest::header::{Authorization, Basic};
 use self::reqwest::Method;
+
+use std::collections::BTreeMap;
 
 use hooks::{Emitter, EmitAction, EmitResponse, Payload};
 use config::HookConfig;
@@ -16,7 +19,7 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
         self.payload.data.get("type").and_then(|type_json| type_json.as_str()).unwrap_or("")
     }
 
-    fn hooks(&self) -> Option<&Vec<String>> {
+    fn hooks(&self) -> Option<&Vec<BTreeMap<String, String>>> {
         self.config.get(self.payload_type())
     }
 
@@ -26,21 +29,31 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
             .unwrap_or(&vec![])
             .iter()
             .map(|hook| {
+                let url = hook.get("url").unwrap();
+
                 let status = match http_client() {
                     Some(client) => {
-                        let resp = match method {
-                                EmitAction::Delete => client.request(Method::Delete, hook),
-                                EmitAction::Update => client.post(hook),
-                            }
-                            .json(&self.payload)
-                            .send();
+                        let user = hook.get("user")
+                            .map(|user_ref| user_ref.to_owned())
+                            .unwrap_or("".to_string());
+                        let pass = hook.get("pass").map(|pass_ref| pass_ref.to_owned());
 
-                        resp.ok().map_or_else(|| false, |_| true)
+                        let req = match method {
+                                EmitAction::Delete => client.request(Method::Delete, url),
+                                EmitAction::Update => client.post(url),
+                            }
+                            .header(Authorization(Basic {
+                                username: user,
+                                password: pass,
+                            }))
+                            .json(&self.payload);
+
+                        req.send().ok().map_or_else(|| false, |_| true)
                     }
                     None => false,
                 };
 
-                (hook, status)
+                (url, status)
             })
             .fold((vec![], vec![]), |(mut pass, mut fail), (hook, status)| {
                 if status == true {
@@ -104,8 +117,11 @@ mod tests {
         let mut endpoint = mockito::SERVER_URL.to_string();
         endpoint.push_str("/http_emit_update_test/");
 
+        let mut hook = BTreeMap::new();
+        hook.insert("url".to_string(), endpoint.to_string());
+
         let mut config = BTreeMap::new();
-        config.insert("show".to_string(), vec![endpoint.to_string()]);
+        config.insert("show".to_string(), vec![hook]);
 
         if let Json::Object(payload_map) =
             json!({
@@ -152,8 +168,11 @@ mod tests {
         let mut endpoint = mockito::SERVER_URL.to_string();
         endpoint.push_str("/http_emit_delete_test/");
 
+        let mut hook = BTreeMap::new();
+        hook.insert("url".to_string(), endpoint.to_string());
+
         let mut config = BTreeMap::new();
-        config.insert("show".to_string(), vec![endpoint.to_string()]);
+        config.insert("show".to_string(), vec![hook]);
 
         if let Json::Object(payload_map) =
             json!({
@@ -203,15 +222,20 @@ mod tests {
             .with_body(test_response.as_str())
             .create();
 
-        let mut endpoint = mockito::SERVER_URL.to_string();
-        endpoint.push_str("/http_calls_all_hooks_for_type_test/");
+        let mut endpoint1 = mockito::SERVER_URL.to_string();
+        endpoint1.push_str("/http_calls_all_hooks_for_type_test/");
 
         let mut endpoint2 = mockito::SERVER_URL.to_string();
         endpoint2.push_str("/http_calls_all_hooks_for_type_test_2/");
 
+        let mut hook1 = BTreeMap::new();
+        hook1.insert("url".to_string(), endpoint1.to_string());
+
+        let mut hook2 = BTreeMap::new();
+        hook2.insert("url".to_string(), endpoint2.to_string());
+
         let mut config = BTreeMap::new();
-        config.insert("show".to_string(),
-                      vec![endpoint.to_string(), endpoint2.to_string()]);
+        config.insert("show".to_string(), vec![hook1, hook2]);
 
         if let Json::Object(payload_map) =
             json!({
@@ -229,7 +253,7 @@ mod tests {
             let emit = HttpEmitter::new(&payload, &config);
 
             let emit_resp = EmitResponse {
-                success: vec![endpoint.to_string(), endpoint2.to_string()],
+                success: vec![endpoint1.to_string(), endpoint2.to_string()],
                 failure: vec![],
             };
 
@@ -249,15 +273,21 @@ mod tests {
             .with_body(test_response.as_str())
             .create();
 
-        let mut endpoint = mockito::SERVER_URL.to_string();
-        endpoint.push_str("/http_only_calls_hooks_for_type_test/");
+        let mut endpoint1 = mockito::SERVER_URL.to_string();
+        endpoint1.push_str("/http_only_calls_hooks_for_type_test/");
+
+        let mut hook1 = BTreeMap::new();
+        hook1.insert("url".to_string(), endpoint1.to_string());
 
         let mut endpoint2 = mockito::SERVER_URL.to_string();
         endpoint2.push_str("/http_only_calls_hooks_for_type_test_2/");
 
+        let mut hook2 = BTreeMap::new();
+        hook2.insert("url".to_string(), endpoint2.to_string());
+
         let mut config = BTreeMap::new();
-        config.insert("show".to_string(), vec![endpoint.to_string()]);
-        config.insert("asset".to_string(), vec![endpoint2.to_string()]);
+        config.insert("show".to_string(), vec![hook1]);
+        config.insert("asset".to_string(), vec![hook2]);
 
         if let Json::Object(payload_map) =
             json!({
@@ -275,7 +305,7 @@ mod tests {
             let emit = HttpEmitter::new(&payload, &config);
 
             let emit_resp = EmitResponse {
-                success: vec![endpoint.to_string()],
+                success: vec![endpoint1.to_string()],
                 failure: vec![],
             };
 

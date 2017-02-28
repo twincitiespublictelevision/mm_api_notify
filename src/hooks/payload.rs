@@ -172,14 +172,14 @@ mod tests {
 
         if let Json::Object(payload_map) =
             json!({
+            "updated_at": "2017-01-01T00:00:00Z",
             "id": "test-child",
             "type": "show",
-            "updated_at": "2017-01-01T00:00:00Z",
             "parent": {
-                "id": "test-parent",
-                "parent": null,
                 "updated_at": "2017-01-01T00:00:00Z",
-                "type": "franchise"
+                "id": "test-parent",
+                "type": "franchise",
+                "parent": null
             }
         }) {
 

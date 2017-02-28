@@ -41,7 +41,16 @@ impl Object {
     }
 
     pub fn parent<T: StorageEngine>(&self, store: &T) -> Option<Object> {
-        vec!["episode", "season", "special", "show", "franchise"]
+        let parent_keys = match self.object_type.as_str() {
+            "asset" => vec!["episode", "franchise", "season", "show", "special"],
+            "episode" => vec!["season"],
+            "season" => vec!["show"],
+            "show" => vec!["franchise"],
+            "special" => vec!["show"],
+            _ => vec![],
+        };
+
+        parent_keys
             .iter()
             .filter_map(|parent_type| {
                 self.attributes.get(parent_type).and_then(|parent| Ref::from_json(parent).ok())
@@ -411,8 +420,12 @@ mod tests {
     fn emits_update_if_new() {
         let e = "http://0.0.0.0/".to_string();
 
+        let mut hook = BTreeMap::new();
+        hook.insert("url".to_string(), e);
+
         let mut config = BTreeMap::new();
-        config.insert("show".to_string(), vec![e.clone(), e.clone(), e.clone()]);
+        config.insert("show".to_string(),
+                      vec![hook.clone(), hook.clone(), hook.clone()]);
 
         let obj_json = json!({
             "data": {
@@ -442,8 +455,12 @@ mod tests {
     fn skips_emit_if_old() {
         let e = "http://0.0.0.0/".to_string();
 
+        let mut hook = BTreeMap::new();
+        hook.insert("url".to_string(), e);
+
         let mut config = BTreeMap::new();
-        config.insert("show".to_string(), vec![e.clone(), e.clone(), e.clone()]);
+        config.insert("show".to_string(),
+                      vec![hook.clone(), hook.clone(), hook.clone()]);
 
         let obj_json = json!({
             "data": {

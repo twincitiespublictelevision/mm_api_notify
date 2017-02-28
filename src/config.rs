@@ -34,7 +34,7 @@ pub struct APIConfig {
 }
 
 // API Webhook configuration
-pub type HookConfig = BTreeMap<String, Vec<String>>;
+pub type HookConfig = BTreeMap<String, Vec<BTreeMap<String, String>>>;
 
 pub fn parse_config(path: &str) -> Option<Config> {
 
