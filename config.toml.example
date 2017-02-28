@@ -14,6 +14,9 @@ key = ""
 secret = ""
 changelog_max_timespan = 2505600
 
+[log]
+location = "error.log"
+
 # This is a sample hook definition. They are not required and can defined for
 # each of the different Media Manager types
 [hooks]

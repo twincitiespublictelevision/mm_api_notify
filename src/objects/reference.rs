@@ -56,12 +56,19 @@ impl Ref {
             .and_then(|json| Object::from_json(&json))
             .and_then(|obj| Ok(obj.import(runtime, follow_refs, since)));
 
-        if runtime.verbose && res.is_err() {
-            println!("{:<10} {} {:<10} due to {:?}",
-                     "Skipping",
-                     self.id,
-                     self.ref_type,
-                     res);
+        if res.is_err() {
+            warn!("Failed to import {} {} due to {:?}",
+                  self.ref_type,
+                  self.id,
+                  res);
+
+            if runtime.verbose {
+                println!("{:<10} {} {:<10} due to {:?}",
+                         "Skipping",
+                         self.id,
+                         self.ref_type,
+                         res);
+            }
         }
 
         res.unwrap_or((0, 1))
@@ -160,7 +167,7 @@ mod tests {
 
     use std::collections::BTreeMap;
 
-    use config::{APIConfig, Config, DBConfig};
+    use config::{APIConfig, Config, DBConfig, LogConfig};
     use client::{APIClient, TestClient};
     use error::IngestError;
     use objects::{Importable, Ref};
@@ -189,6 +196,7 @@ mod tests {
             },
             thread_pool_size: 0,
             min_runtime_delta: 0,
+            log: LogConfig { location: None },
             enable_hooks: false,
             hooks: None,
         };

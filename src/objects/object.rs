@@ -219,7 +219,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use client::{APIClient, TestClient};
-    use config::{APIConfig, Config, DBConfig};
+    use config::{APIConfig, Config, DBConfig, LogConfig};
     use error::IngestError;
     use objects::{Importable, Object};
     use runtime::Runtime;
@@ -247,6 +247,7 @@ mod tests {
             },
             thread_pool_size: 0,
             min_runtime_delta: 0,
+            log: LogConfig { location: None },
             enable_hooks: false,
             hooks: None,
         };

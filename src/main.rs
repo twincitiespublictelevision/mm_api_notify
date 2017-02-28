@@ -7,6 +7,9 @@ extern crate app_dirs;
 extern crate bson;
 extern crate chrono;
 extern crate clap;
+extern crate fern;
+#[macro_use]
+extern crate log;
 extern crate mm_client;
 extern crate mongodb;
 extern crate rayon;
@@ -106,6 +109,27 @@ fn main() {
         .ok_or(IngestError::InvalidConfig)
         .and_then(|config| {
 
+            // Initialize logging
+            if let &Some(ref log_location) = &config.log.location {
+                let logger_config = fern::DispatchConfig {
+                    format: Box::new(|msg: &str, level: &log::LogLevel, _: &log::LogLocation| {
+                        format!("[{}][{}] {}",
+                                UTC::now()
+                                    .format("%Y-%m-%d][%H:%M:%S")
+                                    .to_string(),
+                                level,
+                                msg)
+                    }),
+                    output: vec![fern::OutputConfig::file(log_location.as_str())],
+                    level: log::LogLevelFilter::Warn,
+                };
+
+                if let Err(e) = fern::init_global_logger(logger_config,
+                                                         log::LogLevelFilter::Trace) {
+                    panic!("Failed to initialize logger: {}", e);
+                }
+            }
+
             // Initialize the thread pools
             rayon::initialize(rayon::Configuration::new().set_num_threads(config.thread_pool_size))
                 .map_err(IngestError::ThreadPool)
@@ -130,7 +154,10 @@ fn main() {
                         match runtime.store.get(query_args[1], query_args[0]) {
                             Some(obj) => {
                                 match Payload::from_object(&obj, &runtime.store) {
-                                    Some(payload) => println!("{}", serde_json::to_string_pretty(&payload).unwrap()),
+                                    Some(payload) => {
+                                        println!("{}",
+                                                 serde_json::to_string_pretty(&payload).unwrap())
+                                    }
                                     None => println!("Failed to generate payload from object."),
                                 }
                             }

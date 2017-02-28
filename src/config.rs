@@ -10,8 +10,14 @@ pub struct Config {
     pub mm: APIConfig,
     pub thread_pool_size: usize,
     pub min_runtime_delta: i64,
+    pub log: LogConfig,
     pub enable_hooks: bool,
     pub hooks: Option<HookConfig>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LogConfig {
+    pub location: Option<String>,
 }
 
 // Database configuration/

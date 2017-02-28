@@ -137,7 +137,7 @@ mod tests {
     use std::collections::HashSet;
     use std::iter::FromIterator;
 
-    use config::{APIConfig, Config, DBConfig};
+    use config::{APIConfig, Config, DBConfig, LogConfig};
     use objects::{Collection, Importable, Ref};
     use runtime::Runtime;
     use storage::{SinkStore, Storage};
@@ -213,6 +213,7 @@ mod tests {
             },
             thread_pool_size: 0,
             min_runtime_delta: 0,
+            log: LogConfig { location: None },
             enable_hooks: false,
             hooks: None,
         };
