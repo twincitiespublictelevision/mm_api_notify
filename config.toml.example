@@ -13,3 +13,10 @@ password = ""
 key = ""
 secret = ""
 changelog_max_timespan = 2505600
+
+# This is a sample hook definition. They are not required and can defined for
+# each of the different Media Manager types
+[hooks]
+asset = [
+  { url = "", username = "", password = "" }
+]
