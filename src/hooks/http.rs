@@ -1,7 +1,7 @@
 extern crate reqwest;
 
 use self::reqwest::header::{Authorization, Basic};
-use self::reqwest::Method;
+use self::reqwest::{Method, StatusCode};
 
 use std::collections::BTreeMap;
 
@@ -28,27 +28,33 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
         let hook_results = self.hooks()
             .unwrap_or(&vec![])
             .iter()
-            .map(|hook| {
-                let url = hook.get("url").unwrap();
+            .filter_map(|hook| {
+                hook.get("url").map(|url| {
+                    let user = hook.get("username")
+                        .map(|user_ref| user_ref.to_owned())
+                        .unwrap_or("".to_string());
+                    let pass = hook.get("password").map(|pass_ref| pass_ref.to_owned());
 
+                    (url, user, pass)
+                })
+            })
+            .map(|(url, user, pass)| {
                 let status = match http_client() {
                     Some(client) => {
-                        let user = hook.get("user")
-                            .map(|user_ref| user_ref.to_owned())
-                            .unwrap_or("".to_string());
-                        let pass = hook.get("pass").map(|pass_ref| pass_ref.to_owned());
-
                         let req = match method {
                                 EmitAction::Delete => client.request(Method::Delete, url),
                                 EmitAction::Update => client.post(url),
                             }
                             .header(Authorization(Basic {
-                                username: user,
-                                password: pass,
+                                username: user.clone(),
+                                password: pass.clone(),
                             }))
                             .json(&self.payload);
 
-                        req.send().ok().map_or_else(|| false, |_| true)
+                        req.send().ok().map_or_else(|| false, |resp| match resp.status() {
+                            &StatusCode::Ok => true,
+                            _ => false,
+                        })
                     }
                     None => false,
                 };
@@ -306,6 +312,186 @@ mod tests {
 
             let emit_resp = EmitResponse {
                 success: vec![endpoint1.to_string()],
+                failure: vec![],
+            };
+
+            assert_eq!(emit.update(), emit_resp)
+        } else {
+            panic!("Failed to create payload map")
+        }
+    }
+
+    #[test]
+    fn skips_hooks_without_url() {
+        let test_response = String::from("{\"name\":\"value\"}");
+
+        mock("POST", "/http_skips_hooks_without_url_test/")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(test_response.as_str())
+            .create();
+
+        let hook = BTreeMap::new();
+
+        let mut config = BTreeMap::new();
+        config.insert("show".to_string(), vec![hook]);
+
+        if let Json::Object(payload_map) =
+            json!({
+            "id": "test-child",
+            "type": "show",
+            "updated_at": "2017-01-01T00:00:00Z",
+            "parent": {
+                "id": "test-parent",
+                "parent": null,
+                "updated_at": "2017-01-01T00:00:00Z",
+                "type": "franchise"
+            }
+        }) {
+            let payload = Payload { data: payload_map };
+            let emit = HttpEmitter::new(&payload, &config);
+
+            let emit_resp = EmitResponse {
+                success: vec![],
+                failure: vec![],
+            };
+
+            assert_eq!(emit.update(), emit_resp)
+        } else {
+            panic!("Failed to create payload map")
+        }
+    }
+
+    #[test]
+    fn handles_hooks_without_auth() {
+        let test_response = String::from("{\"name\":\"value\"}");
+
+        mock("POST", "/http_handles_hooks_without_auth_test/")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(test_response.as_str())
+            .create();
+
+        let mut endpoint = mockito::SERVER_URL.to_string();
+        endpoint.push_str("/http_handles_hooks_without_auth_test/");
+
+        let mut hook = BTreeMap::new();
+        hook.insert("url".to_string(), endpoint.to_string());
+
+        let mut config = BTreeMap::new();
+        config.insert("show".to_string(), vec![hook]);
+
+        if let Json::Object(payload_map) =
+            json!({
+            "id": "test-child",
+            "type": "show",
+            "updated_at": "2017-01-01T00:00:00Z",
+            "parent": {
+                "id": "test-parent",
+                "parent": null,
+                "updated_at": "2017-01-01T00:00:00Z",
+                "type": "franchise"
+            }
+        }) {
+            let payload = Payload { data: payload_map };
+            let emit = HttpEmitter::new(&payload, &config);
+
+            let emit_resp = EmitResponse {
+                success: vec![endpoint.to_string()],
+                failure: vec![],
+            };
+
+            assert_eq!(emit.update(), emit_resp)
+        } else {
+            panic!("Failed to create payload map")
+        }
+    }
+
+    #[test]
+    fn handles_hooks_with_auth() {
+        let test_response = String::from("{\"name\":\"value\"}");
+
+        mock("POST", "/http_handles_hooks_with_auth_test/")
+            .match_header("Authorization", "Basic aGVsbG86d29ybGQ=")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(test_response.as_str())
+            .create();
+
+        let mut endpoint = mockito::SERVER_URL.to_string();
+        endpoint.push_str("/http_handles_hooks_with_auth_test/");
+
+        let mut hook = BTreeMap::new();
+        hook.insert("url".to_string(), endpoint.to_string());
+        hook.insert("username".to_string(), "hello".to_string());
+        hook.insert("password".to_string(), "world".to_string());
+
+        let mut config = BTreeMap::new();
+        config.insert("show".to_string(), vec![hook]);
+
+        if let Json::Object(payload_map) =
+            json!({
+            "id": "test-child",
+            "type": "show",
+            "updated_at": "2017-01-01T00:00:00Z",
+            "parent": {
+                "id": "test-parent",
+                "parent": null,
+                "updated_at": "2017-01-01T00:00:00Z",
+                "type": "franchise"
+            }
+        }) {
+            let payload = Payload { data: payload_map };
+            let emit = HttpEmitter::new(&payload, &config);
+
+            let emit_resp = EmitResponse {
+                success: vec![endpoint.to_string()],
+                failure: vec![],
+            };
+
+            assert_eq!(emit.update(), emit_resp)
+        } else {
+            panic!("Failed to create payload map")
+        }
+    }
+
+    #[test]
+    fn emits_json_content_type_header() {
+        let test_response = String::from("{\"name\":\"value\"}");
+
+        mock("POST", "/http_emits_json_content_type_header_test/")
+            .match_header("content-type", "application/json")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(test_response.as_str())
+            .create();
+
+        let mut endpoint = mockito::SERVER_URL.to_string();
+        endpoint.push_str("/http_emits_json_content_type_header_test/");
+
+        let mut hook = BTreeMap::new();
+        hook.insert("url".to_string(), endpoint.to_string());
+
+        let mut config = BTreeMap::new();
+        config.insert("show".to_string(), vec![hook]);
+
+        if let Json::Object(payload_map) =
+            json!({
+            "id": "test-child",
+            "type": "show",
+            "updated_at": "2017-01-01T00:00:00Z",
+            "parent": {
+                "id": "test-parent",
+                "parent": null,
+                "updated_at": "2017-01-01T00:00:00Z",
+                "type": "franchise"
+            }
+        }) {
+            let payload = Payload { data: payload_map };
+            let emit = HttpEmitter::new(&payload, &config);
+
+            let emit_resp = EmitResponse {
+                success: vec![endpoint.to_string()],
                 failure: vec![],
             };
 
