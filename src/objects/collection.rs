@@ -33,7 +33,12 @@ impl Collection {
     }
 
     fn get_collection<S: ThreadedAPI>(&self, api: &S, url: &str) -> IngestResult<Collection> {
-        utils::parse_response(api.url(url)).and_then(|json| Collection::from_json(&json))
+        utils::parse_response(api.url(url))
+            .and_then(|json| Collection::from_json(&json))
+            .or_else(|err| {
+                error!("Failed to query {} due to {}", url, err);
+                Err(err)
+            })
     }
 
     fn import_page<T: StorageEngine, S: ThreadedAPI>(&self,

@@ -90,8 +90,16 @@ impl Object {
                                                          since: i64)
                                                          -> ImportResult {
 
-        vec!["assets", "episodes", "seasons", "shows", "specials"]
-            .par_iter()
+        let child_keys = match self.object_type.as_str() {
+            "episode" => vec!["assets"],
+            "franchise" => vec!["assets", "shows"],
+            "season" => vec!["assets", "episodes"],
+            "show" => vec!["assets", "seasons", "specials"],
+            "special" => vec!["assets"],
+            _ => vec![],
+        };
+
+        child_keys.par_iter()
             .map(|child_type| {
                 self.child_collection(&runtime.api, child_type)
                     .and_then(|child_collection| {
@@ -107,9 +115,15 @@ impl Object {
 
         url.push_str(child_type);
         url.push('/');
-        utils::parse_response(api.url(url.as_str()))
-            .and_then(|api_json| Collection::from_json(&api_json))
-            .ok()
+
+        match utils::parse_response(api.url(url.as_str()))
+            .and_then(|api_json| Collection::from_json(&api_json)) {
+            Ok(coll) => Some(coll),
+            Err(err) => {
+                error!("Failed to query {} due to {}", url, err);
+                None
+            }
+        }
     }
 }
 
@@ -157,7 +171,13 @@ impl Importable for Object {
                 (0, 0)
             };
 
-            res.ok().map_or_else(|| (0, 1), |_| emit_res)
+            match res {
+                Ok(_) => emit_res,
+                Err(err) => {
+                    error!("Failed to write {} to cache due to {}", self, err);
+                    (0, 1)
+                }
+            }
         } else {
             (0, 0)
         };

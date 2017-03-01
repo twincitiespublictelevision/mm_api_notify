@@ -54,22 +54,24 @@ impl Ref {
 
         let res = utils::parse_response(runtime.api.url(self.self_url.as_str()))
             .and_then(|json| Object::from_json(&json))
-            .and_then(|obj| Ok(obj.import(runtime, follow_refs, since)));
+            .and_then(|obj| Ok(obj.import(runtime, follow_refs, since)))
+            .or_else(|err| {
+                warn!("Failed to import {} {} due to {:?}",
+                      self.ref_type,
+                      self.id,
+                      err);
 
-        if res.is_err() {
-            warn!("Failed to import {} {} due to {:?}",
-                  self.ref_type,
-                  self.id,
-                  res);
+                if runtime.verbose {
+                    println!("{:<10} {} {:<10} due to {:?}",
+                             "Skipping",
+                             self.id,
+                             self.ref_type,
+                             err);
+                }
 
-            if runtime.verbose {
-                println!("{:<10} {} {:<10} due to {:?}",
-                         "Skipping",
-                         self.id,
-                         self.ref_type,
-                         res);
-            }
-        }
+                Err(err)
+            });
+
 
         res.unwrap_or((0, 1))
     }
