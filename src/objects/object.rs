@@ -118,16 +118,22 @@ impl Object {
     }
 
     fn child_collection<T: ThreadedAPI>(&self, api: &T, child_type: &str) -> Option<Collection> {
-        let mut url = self.links.get("self").unwrap().as_str().unwrap().to_string();
+        match self.links.get("self").and_then(|val| val.as_str()) {
+            Some(base_url) => {
+                let url = format!("{}{}s/", base_url, child_type);
 
-        url.push_str(child_type);
-        url.push_str("s/");
-
-        match utils::parse_response(api.url(url.as_str()))
-            .and_then(|api_json| Collection::from_json(&api_json)) {
-            Ok(coll) => Some(coll),
-            Err(err) => {
-                error!("Failed to query {} due to {}", url, err);
+                utils::parse_response(api.url(url.as_str()))
+                    .and_then(|api_json| Collection::from_json(&api_json))
+                    .or_else(|err| {
+                        error!("Failed to query {} due to {}", url, err);
+                        Err(err)
+                    })
+                    .ok()
+            }
+            None => {
+                error!("Failed to build self url from {} when importing child {}s",
+                       self,
+                       child_type);
                 None
             }
         }
