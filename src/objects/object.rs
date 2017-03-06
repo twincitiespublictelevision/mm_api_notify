@@ -90,19 +90,26 @@ impl Object {
                                                          since: i64)
                                                          -> ImportResult {
 
-        let child_keys = match self.object_type.as_str() {
-            "episode" => vec!["assets"],
-            "franchise" => vec!["assets", "shows"],
-            "season" => vec!["assets", "episodes"],
-            "show" => vec!["assets", "seasons", "specials"],
-            "special" => vec!["assets"],
+        let child_types = match self.object_type.as_str() {
+            "episode" => vec!["asset"],
+            "franchise" => vec!["asset", "show"],
+            "season" => vec!["asset", "episode"],
+            "show" => vec!["asset", "season", "special"],
+            "special" => vec!["asset"],
             _ => vec![],
         };
 
-        child_keys.par_iter()
+        child_types.par_iter()
             .map(|child_type| {
                 self.child_collection(&runtime.api, child_type)
                     .and_then(|child_collection| {
+
+                        // TODO: Handle special case importing of collections
+                        // Collections should never follow refs as all child elements are available
+                        // under some other object.
+                        // Collections need special casing for handling their paginated nature
+                        // and unique storage requirements
+
                         Some(child_collection.import(runtime, follow_refs, since))
                     })
                     .unwrap_or((0, 1))
@@ -114,7 +121,7 @@ impl Object {
         let mut url = self.links.get("self").unwrap().as_str().unwrap().to_string();
 
         url.push_str(child_type);
-        url.push('/');
+        url.push_str("s/");
 
         match utils::parse_response(api.url(url.as_str()))
             .and_then(|api_json| Collection::from_json(&api_json)) {
@@ -124,6 +131,29 @@ impl Object {
                 None
             }
         }
+    }
+
+    fn import_parents<T: StorageEngine, S: ThreadedAPI>(&self,
+                                                        runtime: &Runtime<T, S>,
+                                                        _: bool,
+                                                        since: i64)
+                                                        -> ImportResult {
+
+        let parent_types = match self.object_type.as_str() {
+            "show" => vec!["franchise"],
+            _ => vec![],
+        };
+
+        parent_types.par_iter()
+            .map(|parent_type| match self.attributes.get(parent_type) {
+                Some(parent_obj) => {
+                    Ref::from_json(parent_obj)
+                        .and_then(|refr| Ok(refr.import(runtime, false, since)))
+                        .unwrap_or((0, 1))
+                }
+                _ => (0, 0),
+            })
+            .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2))
     }
 }
 
@@ -155,24 +185,22 @@ impl Importable for Object {
 
             let res = runtime.store.put(self);
 
-            let emit_res = if res.is_ok() && runtime.config.enable_hooks &&
-                              runtime.config.hooks.is_some() {
+            if res.is_ok() && runtime.config.enable_hooks && runtime.config.hooks.is_some() {
                 Payload::from_object(self, &runtime.store)
                     .and_then(|payload| {
-                        Some(match runtime.config.hooks {
-                            Some(ref hooks) => {
-                                payload.emitter(&hooks, HttpEmitter::new).update().results()
-                            }
-                            None => (0, 0),
-                        })
+                        runtime.config
+                            .hooks
+                            .as_ref()
+                            .map(|hooks| payload.emitter(&hooks, HttpEmitter::new).update())
                     })
-                    .unwrap_or((0, 1))
-            } else {
-                (0, 0)
+                    .or_else(|| {
+                        error!("Failed to emit {}", self);
+                        None
+                    });
             };
 
             match res {
-                Ok(_) => emit_res,
+                Ok(_) => (1, 0),
                 Err(err) => {
                     error!("Failed to write {} to cache due to {}", self, err);
                     (0, 1)
@@ -185,6 +213,10 @@ impl Importable for Object {
         if follow_refs {
             let child_results = self.import_children(runtime, follow_refs, since);
             update_result = (update_result.0 + child_results.0, update_result.1 + child_results.1);
+
+            let parent_results = self.import_parents(runtime, follow_refs, since);
+            update_result = (update_result.0 + parent_results.0,
+                             update_result.1 + parent_results.1);
         };
 
         update_result
