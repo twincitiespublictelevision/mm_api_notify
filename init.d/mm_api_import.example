@@ -14,6 +14,8 @@ start() {
   # example: daemon program_name &
   echo -n "Starting Media Manager Importer: "
   daemon $exec --config $prog_config > /dev/null 2>&1 &
+  echo_success
+  echo
   return 0
 }
 
@@ -22,6 +24,7 @@ stop() {
   # example: killproc program_name
   echo -n "Stopping Media Manager Importer: "
   killproc $prog
+  echo
   return 0
 }
 
