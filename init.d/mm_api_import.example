@@ -10,15 +10,19 @@ exec=/usr/sbin/$prog
 . /etc/init.d/functions
 
 start() {
-    # code to start app comes here
-    # example: daemon program_name &
-		daemon $exec --config $prog_config &
+  # code to start app comes here
+  # example: daemon program_name &
+  echo -n "Starting Media Manager Importer: "
+  daemon $exec --config $prog_config > /dev/null 2>&1 &
+  return 0
 }
 
 stop() {
-    # code to stop app comes here
-    # example: killproc program_name
-		killproc $prog
+  # code to stop app comes here
+  # example: killproc program_name
+  echo -n "Stopping Media Manager Importer: "
+  killproc $prog
+  return 0
 }
 
 case "$1" in
