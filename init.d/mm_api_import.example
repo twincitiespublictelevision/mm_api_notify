@@ -1,0 +1,149 @@
+#! /bin/sh
+#
+# mm_api_ingest Control the Media Manage Importer
+#
+# chkconfig: - 90 10
+# description: Media Manager Importer maintains a cache of Media Manager data
+#							 and emits updates to configured listeners
+# processname: mm_api_import
+# prog_config: /etc/sysconfig/mm_api_import
+# pidfile: /var/run/mm_api_import.pid
+
+### BEGIN INIT INFO
+# Provides: mm_api_import
+# Required-Start:
+# Required-Stop:
+# Default-Start:
+# Default-Stop:
+# Should-Start:
+# Short-Description: start and stop mm_api_import
+# Description: Media Manager Importer maintains a cache of Media Manager data
+#							 and emits updates to configured listeners
+### END INIT INFO
+
+# Source function library.
+. /etc/init.d/functions
+
+retval=0
+pidfile=/var/run/mm_api_import.pid
+
+exec="/usr/sbin/mm_api_import"
+prog="mm_api_import"
+prog_config=/etc/sysconfig/$prog
+lockfile=/var/lock/subsys/$prog
+
+start() {
+
+	if [ ! -x $exec ]
+	then
+		echo $exec not found
+		exit 5
+	fi
+
+	if [ ! -f $prog_config ]
+	then
+		echo $prog_config not found
+		exit 6
+	fi
+
+	echo -n "Starting Media Manager Importer: "
+
+	# Start the importer
+	daemon --pidfile $pidfile $exec --config $prog_config > /dev/null 2>&1
+	retval=$?
+
+	if [ $retval -eq 0 ]
+	then
+		touch $lockfile
+		echo_success
+		echo
+	else
+		echo_failure
+		echo
+	fi
+
+	return $retval
+}
+
+build_start() {
+
+	if [ ! -x $exec ]
+	then
+		echo $exec not found
+		exit 5
+	fi
+
+	if [ ! -f $prog_config ]
+	then
+		echo $prog_config not found
+		exit 6
+	fi
+
+	echo -n "Starting Media Manager Importer: "
+
+	# Start the importer
+	daemon --pidfile $pidfile $exec --config $prog_config -b > /dev/null 2>&1
+	retval=$?
+
+	if [ $retval -eq 0 ]
+	then
+		touch $lockfile
+		echo_success
+		echo
+	else
+		echo_failure
+		echo
+	fi
+
+	return $retval
+}
+
+stop() {
+	echo -n "Stopping Media Manager Importer: "
+	killproc -p $pidfile $prog
+	retval=$?
+	echo
+	[ $retval -eq 0 ] && rm -f $lockfile
+	return $retval
+}
+
+restart() {
+	stop
+	start
+}
+
+rh_status() {
+	status -p $pidfile $prog
+}
+
+rh_status_q() {
+	rh_status >/dev/null 2>&1
+}
+
+# See how we were called.
+case "$1" in
+	start)
+		rh_status_q && exit 0
+		$1
+		;;
+	build_start)
+		rh_status_q && exit 0
+		$1
+		;;
+	stop)
+		rh_status_q || exit 0
+		$1
+		;;
+	restart)
+		$1
+		;;
+	status)
+		rh_status
+		;;
+	*)
+	echo "Usage: $0 {start|build_start|stop|status|restart}"
+
+	exit 2
+esac
+
+exit $?
