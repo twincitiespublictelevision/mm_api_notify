@@ -1,149 +1,95 @@
-#! /bin/sh
+#!/bin/sh
 #
-# mm_api_ingest Control the Media Manage Importer
+# TEST          Start/Stop our TEST example script.
 #
-# chkconfig: - 90 10
-# description: Media Manager Importer maintains a cache of Media Manager data
-#							 and emits updates to configured listeners
-# processname: mm_api_import
-# prog_config: /etc/sysconfig/mm_api_import
-# pidfile: /var/run/mm_api_import.pid
+# chkconfig: 2345 90 60
+# description: This is a simple service script that was made to demonstrate \
+# how to write SysVinit scripts to 'daemonize' programs.
+#
+# The daemon's name (to ensure uniqueness and for stop, restart and status)
+name="mm_api_import"
+# The path of the client executable
+command="/usr/sbin/mm_api_import"
+# Any command line arguments for the client executable
+command_args="--config /etc/sysconfig/mm_api_import"
+# The path of the daemon executable
+daemon="/usr/local/bin/daemon"
 
-### BEGIN INIT INFO
-# Provides: mm_api_import
-# Required-Start:
-# Required-Stop:
-# Default-Start:
-# Default-Stop:
-# Should-Start:
-# Short-Description: start and stop mm_api_import
-# Description: Media Manager Importer maintains a cache of Media Manager data
-#							 and emits updates to configured listeners
-### END INIT INFO
+[ -x "$daemon" ] || exit 0
+[ -x "$command" ] || exit 0
 
-# Source function library.
-. /etc/init.d/functions
+# Note: The following daemon option arguments could be in /etc/daemon.conf
+# instead. That would probably be better because if the command itself were
+# there as well then we could just use the name here to start the daemon.
+# Here's some code to do it here in case you prefer that.
 
-retval=0
-pidfile=/var/run/mm_api_import.pid
+# Any command line arguments for the daemon executable (when starting)
+daemon_start_args="" # e.g. --inherit --env="ENV=VAR" --unsafe
+# The pidfile directory (need to force this so status works for normal users)
+pidfiles="/var/run"
+# The user[:group] to run as (if not to be run as root)
+user=""
+# The path to chroot to (otherwise /)
+chroot=""
+# The path to chdir to (otherwise /)
+chdir=""
+# The umask to adopt, if any
+umask=""
+# The syslog facility or filename for the client's stdout (otherwise discarded)
+stdout="daemon.info"
+# The syslog facility or filename for the client's stderr (otherwise discarded)
+stderr="daemon.err"
 
-exec="/usr/sbin/mm_api_import"
-prog="mm_api_import"
-prog_config=/etc/sysconfig/$prog
-lockfile=/var/lock/subsys/$prog
-
-start() {
-
-	if [ ! -x $exec ]
-	then
-		echo $exec not found
-		exit 5
-	fi
-
-	if [ ! -f $prog_config ]
-	then
-		echo $prog_config not found
-		exit 6
-	fi
-
-	echo -n "Starting Media Manager Importer: "
-
-	# Start the importer
-	daemon --pidfile $pidfile $exec --config $prog_config > /dev/null 2>&1
-	retval=$?
-
-	if [ $retval -eq 0 ]
-	then
-		touch $lockfile
-		echo_success
-		echo
-	else
-		echo_failure
-		echo
-	fi
-
-	return $retval
-}
-
-build_start() {
-
-	if [ ! -x $exec ]
-	then
-		echo $exec not found
-		exit 5
-	fi
-
-	if [ ! -f $prog_config ]
-	then
-		echo $prog_config not found
-		exit 6
-	fi
-
-	echo -n "Starting Media Manager Importer: "
-
-	# Start the importer
-	daemon --pidfile $pidfile $exec --config $prog_config -b > /dev/null 2>&1
-	retval=$?
-
-	if [ $retval -eq 0 ]
-	then
-		touch $lockfile
-		echo_success
-		echo
-	else
-		echo_failure
-		echo
-	fi
-
-	return $retval
-}
-
-stop() {
-	echo -n "Stopping Media Manager Importer: "
-	killproc -p $pidfile $prog
-	retval=$?
-	echo
-	[ $retval -eq 0 ] && rm -f $lockfile
-	return $retval
-}
-
-restart() {
-	stop
-	start
-}
-
-rh_status() {
-	status -p $pidfile $prog
-}
-
-rh_status_q() {
-	rh_status >/dev/null 2>&1
-}
-
-# See how we were called.
 case "$1" in
-	start)
-		rh_status_q && exit 0
-		$1
-		;;
-	build_start)
-		rh_status_q && exit 0
-		$1
-		;;
-	stop)
-		rh_status_q || exit 0
-		$1
-		;;
-	restart)
-		$1
-		;;
-	status)
-		rh_status
-		;;
-	*)
-	echo "Usage: $0 {start|build_start|stop|status|restart}"
+    start)
+        # This if statement isn't strictly necessary but it's user friendly
+        if "$daemon" --running --name "$name" --pidfiles "$pidfiles"
+        then
+            echo "$name is already running."
+        else
+            echo -n "Starting $name..."
+            "$daemon" --respawn $daemon_start_args \
+                --name "$name" --pidfiles "$pidfiles" \
+                ${user:+--user $user} ${chroot:+--chroot $chroot} \
+                ${chdir:+--chdir $chdir} ${umask:+--umask $umask} \
+                ${stdout:+--stdout $stdout} ${stderr:+--stderr $stderr} \
+                -- \
+                "$command" $command_args
+            echo done.
+        fi
+        ;;
 
-	exit 2
+    stop)
+        # This if statement isn't strictly necessary but it's user friendly
+        if "$daemon" --running --name "$name" --pidfiles "$pidfiles"
+        then
+            echo -n "Stopping $name..."
+            "$daemon" --stop --name "$name" --pidfiles "$pidfiles"
+            echo done.
+        else
+            echo "$name is not running."
+        fi
+        ;;
+
+    restart)
+        if "$daemon" --running --name "$name" --pidfiles "$pidfiles"
+        then
+            echo -n "Restarting $name..."
+            "$daemon" --restart --name "$name" --pidfiles "$pidfiles"
+            echo done.
+        else
+            echo "$name is not running."
+            exit 1
+        fi
+        ;;
+
+    status)
+        "$daemon" --running --name "$name" --pidfiles "$pidfiles" --verbose
+        ;;
+
+    *)
+        echo "usage: $0 <start|stop|restart|status>" >&2
+        exit 1
 esac
 
-exit $?
+exit 0
