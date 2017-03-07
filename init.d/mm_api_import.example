@@ -12,7 +12,7 @@ exec=/usr/sbin/$prog
 
 start() {
   echo -n "Starting Media Manager Importer: "
-  daemon $exec --config $prog_config > /dev/null 2>&1 &
+  daemon $exec $prog_flags > /dev/null 2>&1 &
   echo_success
   echo
   return 0
