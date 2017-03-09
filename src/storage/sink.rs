@@ -1,7 +1,7 @@
 use config::DBConfig;
 use objects::Object;
 use storage::error::{StoreError, StoreResult};
-use storage::storage::Storage;
+use storage::storage::{Storage, StorageStatus};
 
 #[derive(Debug)]
 pub struct SinkStore {
@@ -19,12 +19,12 @@ impl Storage<Object> for SinkStore {
         Ok(SinkStore { resp: None })
     }
 
-    fn get(&self, _: &str, _: &str) -> Option<Object> {
-        self.resp.clone()
+    fn get(&self, _: &str, _: &str) -> Option<StoreResult<Object>> {
+        self.resp.clone().map(|resp| Ok(resp))
     }
 
-    fn put(&self, _: &Object) -> StoreResult<Object> {
-        self.resp.clone().ok_or(StoreError::StorageWriteError)
+    fn put(&self, _: &Object) -> StoreResult<StorageStatus> {
+        self.resp.clone().ok_or(StoreError::StorageWriteError).and(Ok(StorageStatus::Available))
     }
 
     fn updated_at(&self) -> Option<i64> {

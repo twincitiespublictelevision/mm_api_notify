@@ -46,8 +46,8 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
                                 EmitAction::Update => client.post(url),
                             }
                             .header(Authorization(Basic {
-                                username: user.clone(),
-                                password: pass.clone(),
+                                username: user,
+                                password: pass,
                             }))
                             .json(&self.payload);
 

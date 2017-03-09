@@ -21,14 +21,32 @@ impl APIClient for MMClient {
     }
 
     fn url(&self, url: &str) -> ClientResult<String> {
-        self.client.url(url).map_err(ClientError::API)
+        self.client
+            .url(url)
+            .or_else(|err| {
+                error!("Failed to query {} due to {}", url, err);
+                Err(err)
+            })
+            .map_err(ClientError::API)
     }
 
     fn all_shows(&self) -> ClientResult<String> {
-        self.client.shows(vec![]).map_err(ClientError::API)
+        self.client
+            .shows(vec![])
+            .or_else(|err| {
+                error!("Failed to query all shows due to {}", err);
+                Err(err)
+            })
+            .map_err(ClientError::API)
     }
 
     fn changes(&self, since: &str) -> ClientResult<String> {
-        self.client.changelog(vec![("since", since)]).map_err(ClientError::API)
+        self.client
+            .changelog(vec![("since", since)])
+            .or_else(|err| {
+                error!("Failed to query changelog from {} due to {}", since, err);
+                Err(err)
+            })
+            .map_err(ClientError::API)
     }
 }

@@ -152,7 +152,7 @@ fn main() {
                     if let Some(query) = matches.values_of("query") {
                         let query_args = query.collect::<Vec<&str>>();
                         match runtime.store.get(query_args[1], query_args[0]) {
-                            Some(obj) => {
+                            Some(Ok(obj)) => {
                                 match Payload::from_object(&obj, &runtime.store) {
                                     Some(payload) => {
                                         println!("{}",
@@ -161,7 +161,7 @@ fn main() {
                                     None => println!("Failed to generate payload from object."),
                                 }
                             }
-                            None => println!("Could not find the requested object in the cache."),
+                            _ => println!("Could not find the requested object in the cache."),
                         };
                     } else {
                         let time_arg = matches.value_of("start-time").map_or(0, |arg| {
@@ -268,7 +268,7 @@ fn run_update<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
                                                 -> IngestResult<RunResult> {
 
     let date_string = NaiveDateTime::from_timestamp(run_start_time, 0)
-        .format("%Y-%m-%dT%H:%M:%S")
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
 
     import_response(runtime.api.changes(date_string.as_str()),

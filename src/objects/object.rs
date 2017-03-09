@@ -50,13 +50,13 @@ impl Object {
             _ => vec![],
         };
 
-        parent_keys
-            .iter()
+        parent_keys.iter()
             .filter_map(|parent_type| {
                 self.attributes.get(parent_type).and_then(|parent| Ref::from_json(parent).ok())
             })
             .filter_map(|parent_ref| {
                 store.get(parent_ref.id.as_str(), parent_ref.ref_type.as_str())
+                    .and_then(|res| res.ok())
             })
             .collect::<Vec<Object>>()
             .pop()
@@ -124,10 +124,6 @@ impl Object {
 
                 utils::parse_response(api.url(url.as_str()))
                     .and_then(|api_json| Collection::from_json(&api_json))
-                    .or_else(|err| {
-                        error!("Failed to query {} due to {}", url, err);
-                        Err(err)
-                    })
                     .ok()
             }
             None => {
@@ -200,7 +196,7 @@ impl Importable for Object {
                             .map(|hooks| payload.emitter(&hooks, HttpEmitter::new).update())
                     })
                     .or_else(|| {
-                        error!("Failed to emit {}", self);
+                        error!("Failed to create payload from {}", self);
                         None
                     });
             };

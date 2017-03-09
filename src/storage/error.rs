@@ -1,5 +1,3 @@
-extern crate mongodb;
-
 use std::result::Result;
 use std::fmt;
 

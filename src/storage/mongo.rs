@@ -3,13 +3,14 @@ extern crate mongodb;
 
 use bson::Bson;
 use mongodb::{Client, ThreadedClient};
-use mongodb::db::{Database, ThreadedDatabase};
 use mongodb::coll::options::{FindOptions, FindOneAndUpdateOptions};
+use mongodb::common::WriteConcern;
+use mongodb::db::{Database, ThreadedDatabase};
 
 use config::DBConfig;
 use objects::{Object, utils};
 use storage::error::{StoreError, StoreResult};
-use storage::storage::Storage;
+use storage::storage::{Storage, StorageStatus};
 
 pub struct MongoStore {
     db: Database,
@@ -31,22 +32,29 @@ impl Storage<Object> for MongoStore {
         })
     }
 
-    fn get(&self, id: &str, obj_type: &str) -> Option<Object> {
+    fn get(&self, id: &str, obj_type: &str) -> Option<StoreResult<Object>> {
         let query = doc!{
             "_id" => id
         };
 
         let coll = self.db.collection(obj_type);
 
-        coll.find(Some(query), None).ok().and_then(|mut cursor| match cursor.next() {
-            Some(Ok(doc)) => {
-                bson::from_bson(utils::map_bson_dates_to_string(Bson::Document(doc))).ok()
-            }
-            _ => None,
+        coll.find(Some(query), None).ok().and_then(|mut cursor| {
+            cursor.next()
+                .map(|res| {
+                    res.or_else(|err| {
+                            error!("Failed to get {} from the Mongo store due to {}", id, err);
+                            Err(StoreError::StorageFindError)
+                        })
+                        .and_then(|doc| {
+                            Object::from_bson(utils::map_bson_dates_to_string(Bson::Document(doc)))
+                                .map_err(StoreError::InvalidItemError)
+                        })
+                })
         })
     }
 
-    fn put(&self, item: &Object) -> StoreResult<Object> {
+    fn put(&self, item: &Object) -> StoreResult<StorageStatus> {
         item.as_document().map_err(StoreError::InvalidItemError).and_then(|doc| {
             let coll = self.db.collection(item.object_type.as_str());
             let id = item.id.as_str();
@@ -57,14 +65,23 @@ impl Storage<Object> for MongoStore {
 
             let mut options = FindOneAndUpdateOptions::new();
             options.upsert = Some(true);
+            options.write_concern = Some(WriteConcern {
+                w: 1,
+                w_timeout: 60000,
+                j: true,
+                fsync: true,
+            });
 
             coll.find_one_and_replace(filter, doc, Some(options))
-                .map_err(|_| StoreError::StorageWriteError)
-                .and_then(|opt| match opt {
-                    Some(doc) => {
-                        Object::from_bson(Bson::Document(doc)).map_err(StoreError::InvalidItemError)
-                    }
-                    None => Err(StoreError::StorageFindError),
+                .map_err(|e| {
+                    print!("{:?}", e);
+                    StoreError::StorageWriteError
+                })
+                .and_then(|opt| {
+                    Ok(match opt {
+                        Some(_) => StorageStatus::Available,
+                        None => StorageStatus::NotAvailable,
+                    })
                 })
         })
     }
