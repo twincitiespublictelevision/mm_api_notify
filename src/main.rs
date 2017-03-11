@@ -34,6 +34,8 @@ use chrono::{Duration, NaiveDateTime, UTC};
 use serde_json::error::Result as JsonResult;
 use serde_json::Value as Json;
 
+use std::{thread, time};
+
 use client::{APIClient, ClientResult, MMClient};
 use config::{DBConfig, APIConfig, parse_config};
 use error::{IngestError, IngestResult};
@@ -259,6 +261,12 @@ fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
 
             import_start_time = import_completion_time;
             import_completion_time = UTC::now().timestamp();
+
+            let diff = next_run_time - import_completion_time;
+
+            if diff > 0 {
+                thread::sleep(time::Duration::from_secs(diff as u64));
+            }
         }
     }
 }
