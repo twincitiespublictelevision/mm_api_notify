@@ -133,12 +133,12 @@ fn main() {
             }
 
             // Initialize the thread pools
-            rayon::initialize(rayon::Configuration::new().set_num_threads(config.thread_pool_size))
-                .map_err(IngestError::ThreadPool)
+            rayon::initialize(rayon::Configuration::new().num_threads(config.thread_pool_size))
                 .or_else(|err| {
-                    println!("Failed to initalize the configured thread pool size. Unable to \
-                              start.");
-                    Err(err)
+                    error!("Failed to initalize the configured thread pool size. Unable to \
+                              start. {}",
+                           err);
+                    Err(IngestError::ThreadPool)
                 })
                 .and_then(|_| {
                     let store = get_store(&config.db);

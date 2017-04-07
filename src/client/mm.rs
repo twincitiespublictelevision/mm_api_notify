@@ -32,7 +32,7 @@ impl APIClient for MMClient {
 
     fn all_shows(&self) -> ClientResult<String> {
         self.client
-            .shows(vec![])
+            .shows(vec![("page-size", "50")])
             .or_else(|err| {
                 error!("Failed to query all shows due to {}", err);
                 Err(err)

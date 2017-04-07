@@ -46,34 +46,47 @@ impl Ref {
         }
     }
 
+    fn as_object(&self) -> IngestResult<Object> {
+        if self.ref_type.as_str() == "asset" && self.attributes["parent_tree"] != Json::Null {
+            Ok(Object::new(self.id.clone(),
+                           self.attributes.clone(),
+                           self.ref_type.clone(),
+                           self.self_url.clone()))
+        } else {
+            Err(IngestError::InvalidObjDataError)
+        }
+    }
+
     fn import_general<T: StorageEngine, S: ThreadedAPI>(&self,
                                                         runtime: &Runtime<T, S>,
                                                         follow_refs: bool,
                                                         since: i64)
                                                         -> ImportResult {
 
-        let res = utils::parse_response(runtime.api.url(self.self_url.as_str()))
-            .and_then(|json| Object::from_json(&json))
+        self.as_object()
             .and_then(|obj| Ok(obj.import(runtime, follow_refs, since)))
-            .or_else(|err| {
-                warn!("Failed to import {} {} due to {:?}",
-                      self.ref_type,
-                      self.id,
-                      err);
+            .or_else(|_| {
+                utils::parse_response(runtime.api.url(self.self_url.as_str()))
+                    .and_then(|json| Object::from_json(&json))
+                    .and_then(|obj| Ok(obj.import(runtime, follow_refs, since)))
+                    .or_else(|err| {
+                        warn!("Failed to import {} {} due to {:?}",
+                              self.ref_type,
+                              self.id,
+                              err);
 
-                if runtime.verbose {
-                    println!("{:<10} {} {:<10} due to {:?}",
-                             "Skipping",
-                             self.id,
-                             self.ref_type,
-                             err);
-                }
+                        if runtime.verbose {
+                            println!("{:<10} {} {:<10} due to {:?}",
+                                     "Skipping",
+                                     self.id,
+                                     self.ref_type,
+                                     err);
+                        }
 
-                Err(err)
-            });
-
-
-        res.unwrap_or((0, 1))
+                        Err(err)
+                    })
+            })
+            .unwrap_or((0, 1))
     }
 
     fn import_changelog<T: StorageEngine, S: ThreadedAPI>(&self,
@@ -164,6 +177,7 @@ impl fmt::Display for Ref {
 #[cfg(test)]
 mod tests {
 
+    use mockito::mock;
     use serde_json::Map;
     use serde_json::Value as Json;
 
@@ -318,7 +332,12 @@ mod tests {
 
     #[test]
     fn emits_delete() {
-        let e = "http://0.0.0.0/".to_string();
+        mock("DELETE", "/reference_emit_delete/test-id/")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .create();
+
+        let e = "http://0.0.0.0:1234/reference_emit_delete/".to_string();
 
         let mut hook = BTreeMap::new();
         hook.insert("url".to_string(), e);

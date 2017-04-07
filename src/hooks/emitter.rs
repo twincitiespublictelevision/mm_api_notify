@@ -1,6 +1,7 @@
 use hooks::Payload;
 use config::HookConfig;
 
+#[derive(Debug, PartialEq)]
 pub enum EmitAction {
     Delete,
     Update,

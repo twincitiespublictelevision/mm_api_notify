@@ -90,7 +90,7 @@ mod tests {
     fn invalid_object_attributes() {
         let obj_id = "obj-test-id".to_string();
         let obj_type = "asset".to_string();
-        let obj_links = Json::Object(Map::new());
+        let obj_link = "http://0.0.0.0/obj-test-id/".to_string();
         let store = SinkStore::new(None).unwrap();
 
         let json_types = vec![Json::Null,
@@ -103,7 +103,7 @@ mod tests {
             let obj = Object::new(obj_id.clone(),
                                   json_type,
                                   obj_type.clone(),
-                                  obj_links.clone());
+                                  obj_link.clone());
             assert_eq!(Payload::from_object(&obj, &store), None);
         }
     }
@@ -113,7 +113,7 @@ mod tests {
         let obj = Object::new("obj-test-id".to_string(),
                               Json::Object(Map::new()),
                               "asset".to_string(),
-                              Json::Object(Map::new()));
+                              "http://0.0.0.0/obj-test-id/".to_string());
         let store = SinkStore::new(None).unwrap();
 
         let mut data = Map::new();

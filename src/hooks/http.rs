@@ -1,5 +1,7 @@
 extern crate reqwest;
+extern crate serde_json;
 
+use serde_json::Value as Json;
 use self::reqwest::header::{Authorization, Basic};
 use self::reqwest::{Method, StatusCode};
 
@@ -29,11 +31,20 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
             .unwrap_or(&vec![])
             .iter()
             .filter_map(|hook| {
-                hook.get("url").map(|url| {
+                hook.get("url").map(|base_url| {
                     let user = hook.get("username")
                         .map(|user_ref| user_ref.to_owned())
                         .unwrap_or("".to_string());
                     let pass = hook.get("password").map(|pass_ref| pass_ref.to_owned());
+
+                    let mut url = base_url.clone();
+
+                    if method == EmitAction::Delete {
+                        if let &Json::String(ref id) = &self.payload.data["id"] {
+                            url.push_str(id);
+                            url.push('/');
+                        }
+                    }
 
                     (url, user, pass)
                 })
@@ -42,8 +53,8 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
                 let status = match http_client() {
                     Some(client) => {
                         let req = match method {
-                                EmitAction::Delete => client.request(Method::Delete, url),
-                                EmitAction::Update => client.post(url),
+                                EmitAction::Delete => client.request(Method::Delete, url.as_str()),
+                                EmitAction::Update => client.post(url.as_str()),
                             }
                             .header(Authorization(Basic {
                                 username: user,
@@ -51,9 +62,12 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
                             }))
                             .json(&self.payload);
 
-                        req.send().ok().map_or_else(|| false, |resp| match resp.status() {
-                            &StatusCode::Ok => true,
-                            _ => false,
+                        req.send().ok().map_or_else(|| false, |resp| {
+                            // println!("{:?}", resp);
+                            match resp.status() {
+                                &StatusCode::Ok => true,
+                                _ => false,
+                            }
                         })
                     }
                     None => false,
@@ -163,12 +177,9 @@ mod tests {
 
     #[test]
     fn emits_delete() {
-        let test_response = String::from("{\"name\":\"value\"}");
-
-        mock("DELETE", "/http_emit_delete_test/")
+        mock("DELETE", "/http_emit_delete_test/test-child/")
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(test_response.as_str())
             .create();
 
         let mut endpoint = mockito::SERVER_URL.to_string();
@@ -195,8 +206,11 @@ mod tests {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
+            let mut delete_endpoint = endpoint.clone();
+            delete_endpoint.push_str("test-child/");
+
             let emit_resp = EmitResponse {
-                success: vec![endpoint.to_string()],
+                success: vec![delete_endpoint],
                 failure: vec![],
             };
 
@@ -204,12 +218,6 @@ mod tests {
         } else {
             panic!("Failed to create payload map")
         }
-    }
-
-    #[test]
-    fn delete_contains_id() {
-        // Waiting on mockito update
-        unimplemented!()
     }
 
     #[test]
