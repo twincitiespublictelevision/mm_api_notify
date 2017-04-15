@@ -62,12 +62,9 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
                             }))
                             .json(&self.payload);
 
-                        req.send().ok().map_or_else(|| false, |resp| {
-                            // println!("{:?}", resp);
-                            match resp.status() {
-                                &StatusCode::Ok => true,
-                                _ => false,
-                            }
+                        req.send().ok().map_or_else(|| false, |resp| match resp.status() {
+                            &StatusCode::Ok => true,
+                            _ => false,
                         })
                     }
                     None => false,

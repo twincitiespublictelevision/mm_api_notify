@@ -1,6 +1,6 @@
 #!/bin/bash
 # chkconfig: 35 20 80
-# description: Media Manager API Importer
+# description: Media Manager API Notifier
 
 prog="mm_api_import"
 prog_config=/etc/sysconfig/$prog
@@ -11,7 +11,7 @@ exec=/usr/sbin/$prog
 . /etc/init.d/functions
 
 start() {
-  echo -n "Starting Media Manager Importer: "
+  echo -n "Starting Media Manager Notifier: "
   daemon $exec $prog_flags > /dev/null 2>&1 &
   echo_success
   echo
@@ -24,7 +24,7 @@ build() {
 }
 
 stop() {
-  echo -n "Stopping Media Manager Importer: "
+  echo -n "Stopping Media Manager Notifier: "
   killproc $prog
   echo
   return 0

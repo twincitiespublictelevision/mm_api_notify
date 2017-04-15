@@ -60,31 +60,4 @@ pub fn parse_config(path: &str) -> Option<Config> {
         .unwrap_or_else(|err| panic!("Error while reading config: [{}]", err));
 
     toml::from_str(&config_toml).ok()
-
-
-
-    //
-    // file.read_to_string(&mut config_toml)
-    //     .unwrap_or_else(|err| panic!("Error while reading config: [{}]", err));
-    //
-    // let mut parser = Parser::new(&config_toml);
-    // let toml = parser.parse();
-    //
-    // match toml {
-    //     None => {
-    //         for err in &parser.errors {
-    //             let (loline, locol) = parser.to_linecol(err.lo);
-    //             let (hiline, hicol) = parser.to_linecol(err.hi);
-    //             println!("{}:{}:{}-{}:{} error: {}",
-    //                      path,
-    //                      loline,
-    //                      locol,
-    //                      hiline,
-    //                      hicol,
-    //                      err.desc);
-    //         }
-    //         panic!("Exiting server");
-    //     }
-    //     Some(value) => toml::decode(Value::Table(value)),
-    // }
 }

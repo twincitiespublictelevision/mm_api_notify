@@ -1,4 +1,4 @@
-//! # mm_api_import
+//! # mm_api_notify
 #[cfg(test)]
 extern crate mockito;
 
@@ -50,7 +50,7 @@ use types::{RunResult, StorageEngine, ThreadedAPI};
 ///
 fn main() {
 
-    let matches = App::new("Video Ingest")
+    let matches = App::new("Media Manager Notifier")
         .version(env!("CARGO_PKG_VERSION"))
         .arg(Arg::with_name("config")
             .short("c")
