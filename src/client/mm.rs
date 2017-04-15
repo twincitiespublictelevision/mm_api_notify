@@ -14,7 +14,7 @@ impl APIClient for MMClient {
     fn new(config: Option<&APIConfig>) -> ClientResult<MMClient> {
         config.ok_or(ClientError::ConfigError)
             .and_then(|conf| {
-                Client::staging(conf.key.as_str(), conf.secret.as_str())
+                Client::new(conf.key.as_str(), conf.secret.as_str())
                     .or(Err(ClientError::InitializationError))
             })
             .and_then(|client| Ok(MMClient { client: client }))
