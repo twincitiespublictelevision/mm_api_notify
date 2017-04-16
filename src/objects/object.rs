@@ -153,13 +153,11 @@ impl Importable for Object {
                                                 since: i64)
                                                 -> ImportResult {
 
-        if runtime.verbose {
-            println!("{:<10} {} {:<10} {}",
-                     "Importing",
-                     self.id,
-                     self.object_type,
-                     self.attributes.get("title").unwrap().as_str().unwrap());
-        }
+        info!("{:<10} {} {:<10} {}",
+              "Importing",
+              self.id,
+              self.object_type,
+              self.attributes.get("title").unwrap().as_str().unwrap());
 
         let updated_at_time = self.attributes
             .get("updated_at")
@@ -302,7 +300,6 @@ mod tests {
             api: client,
             config: config,
             store: store,
-            verbose: false,
         }
     }
 

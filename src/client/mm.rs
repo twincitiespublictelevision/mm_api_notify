@@ -1,6 +1,7 @@
 extern crate mm_client;
 
 use mm_client::Client;
+use mm_client::MMCError;
 
 use client::client::APIClient;
 use client::error::{ClientError, ClientResult};
@@ -24,7 +25,13 @@ impl APIClient for MMClient {
         self.client
             .url(url)
             .or_else(|err| {
-                error!("Failed to query {} due to {}", url, err);
+                match err {
+                    MMCError::ResourceNotFound => {}
+                    _ => {
+                        error!("Failed to query {} due to {}", url, err);
+                    }
+                };
+
                 Err(err)
             })
             .map_err(ClientError::API)

@@ -1,10 +1,13 @@
 extern crate chrono;
+extern crate mm_client;
 extern crate serde_json;
 
+use self::mm_client::MMCError;
 use self::serde_json::Value as Json;
 
 use std::fmt;
 
+use client::ClientError;
 use hooks::{Emitter, HttpEmitter, Payload};
 use error::IngestResult;
 use error::IngestError;
@@ -70,18 +73,22 @@ impl Ref {
                     .and_then(|json| Object::from_json(&json))
                     .and_then(|obj| Ok(obj.import(runtime, follow_refs, since)))
                     .or_else(|err| {
-                        warn!("Failed to import {} {} due to {:?}",
-                              self.ref_type,
-                              self.id,
-                              err);
 
-                        if runtime.verbose {
-                            println!("{:<10} {} {:<10} due to {:?}",
-                                     "Skipping",
-                                     self.id,
-                                     self.ref_type,
-                                     err);
-                        }
+                        match err {
+                            IngestError::Client(ClientError::API(MMCError::ResourceNotFound)) => {}
+                            _ => {
+                                warn!("Failed to import {} {} due to {}",
+                                      self.ref_type,
+                                      self.id,
+                                      err);
+                            }
+                        };
+
+                        info!("{:<10} {} {:<10} due to {:?}",
+                              "Skipping",
+                              self.id,
+                              self.ref_type,
+                              err);
 
                         Err(err)
                     })
@@ -221,7 +228,6 @@ mod tests {
             api: client,
             config: config,
             store: store,
-            verbose: false,
         }
     }
 

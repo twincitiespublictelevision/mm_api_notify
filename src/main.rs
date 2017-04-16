@@ -34,6 +34,7 @@ use chrono::{Duration, NaiveDateTime, UTC};
 use serde_json::error::Result as JsonResult;
 use serde_json::Value as Json;
 
+use std::str::FromStr;
 use std::{thread, time};
 
 use client::{APIClient, ClientResult, MMClient};
@@ -72,18 +73,19 @@ fn main() {
             .short("t")
             .takes_value(true)
             .help("Defines the timestamp to start building or updating from"))
-        .arg(Arg::with_name("verbose")
-            .short("v")
-            .long("verbose")
-            .takes_value(false)
-            .help("Provides feedback on import during processing"))
+        .arg(Arg::with_name("log-level")
+            .long("log-level")
+            .short("l")
+            .takes_value(true)
+            .default_value("WARN")
+            .help("Defines the log level to run at. Defaults to WARN"))
         .arg(Arg::with_name("query")
             .long("query")
             .short("q")
             .takes_value(true)
             .number_of_values(2)
             .value_names(&["type", "id"])
-            .conflicts_with_all(&["build", "skip-update", "verbose", "start-time"])
+            .conflicts_with_all(&["build", "skip-update", "log-level", "start-time"])
             .help("Queries the cache with a type and id pair and displays the payload that the \
                    runner will emit"))
         .get_matches();
@@ -113,6 +115,11 @@ fn main() {
 
             // Initialize logging
             if let &Some(ref log_location) = &config.log.location {
+
+                let log_level = matches.value_of("log-level")
+                    .and_then(|level| log::LogLevelFilter::from_str(level).ok())
+                    .unwrap_or(log::LogLevelFilter::Warn);
+
                 let logger_config = fern::DispatchConfig {
                     format: Box::new(|msg: &str, level: &log::LogLevel, _: &log::LogLocation| {
                         format!("[{}][{}] {}",
@@ -122,8 +129,9 @@ fn main() {
                                 level,
                                 msg)
                     }),
-                    output: vec![fern::OutputConfig::file(log_location.as_str())],
-                    level: log::LogLevelFilter::Warn,
+                    output: vec![fern::OutputConfig::stdout(),
+                                 fern::OutputConfig::file(log_location.as_str())],
+                    level: log_level,
                 };
 
                 if let Err(e) = fern::init_global_logger(logger_config,
@@ -135,10 +143,9 @@ fn main() {
             // Initialize the thread pools
             rayon::initialize(rayon::Configuration::new().num_threads(config.thread_pool_size))
                 .or_else(|err| {
-                    error!("Failed to initalize the configured thread pool size. Unable to \
+                    panic!("Failed to initalize the configured thread pool size. Unable to \
                               start. {}",
                            err);
-                    Err(IngestError::ThreadPool)
                 })
                 .and_then(|_| {
                     let store = get_store(&config.db);
@@ -148,7 +155,6 @@ fn main() {
                         api: api,
                         config: config,
                         store: store,
-                        verbose: matches.is_present("verbose"),
                     };
 
                     if let Some(query) = matches.values_of("query") {
@@ -160,7 +166,7 @@ fn main() {
                                         println!("{}",
                                                  serde_json::to_string_pretty(&payload).unwrap())
                                     }
-                                    None => println!("Failed to generate payload from object."),
+                                    None => error!("Failed to generate payload from object."),
                                 }
                             }
                             _ => println!("Could not find the requested object in the cache."),
@@ -214,9 +220,9 @@ fn run_build<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
                                                run_start_time: i64)
                                                -> IngestResult<RunResult> {
 
-    println!("Starting build run from {} : {}",
-             run_start_time,
-             NaiveDateTime::from_timestamp(run_start_time, 0));
+    info!("Starting build run from {} : {}",
+          run_start_time,
+          NaiveDateTime::from_timestamp(run_start_time, 0));
 
     let result = import_response(runtime.api.all_shows(), runtime, run_start_time);
     print_runtime("Create", &result);
@@ -229,7 +235,7 @@ fn compute_update_start_time(last_updated_at: Option<i64>, max_timespan: i64) ->
     let now = UTC::now().timestamp();
 
     if newest_db_timestamp < (now - max_timespan) {
-        println!("Newest database record exceeds the maximum threshold for updates. Performing \
+        warn!("Newest database record exceeds the maximum threshold for updates. Performing \
                   update run with the maximum threshold. Consider performing a build (-b) run to \
                   fully update the database.");
         now - max_timespan
@@ -246,9 +252,9 @@ fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
     let mut next_run_time = run_start_time;
     let label = "Update";
 
-    println!("Starting update loop from {} : {}",
-             run_start_time,
-             NaiveDateTime::from_timestamp(run_start_time, 0));
+    info!("Starting update loop from {} : {}",
+          run_start_time,
+          NaiveDateTime::from_timestamp(run_start_time, 0));
 
     loop {
         if UTC::now().timestamp() > next_run_time {
@@ -316,13 +322,13 @@ fn print_runtime(label: &str, run_time: &IngestResult<RunResult>) {
 }
 
 fn print_sucess(label: &str, &(dur, (pass, fail)): &RunResult) {
-    println!("{} run took {} seconds with {} successes and {} failures.",
-             label,
-             dur.num_seconds(),
-             pass,
-             fail)
+    info!("{} run took {} seconds with {} successes and {} failures.",
+          label,
+          dur.num_seconds(),
+          pass,
+          fail)
 }
 
 fn print_failure(label: &str, error: &IngestError) {
-    println!("{} run failed to run to completion. {}", label, error)
+    error!("{} run failed to run to completion. {}", label, error)
 }

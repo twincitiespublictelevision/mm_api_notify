@@ -17,7 +17,6 @@ pub type IngestResult<T> = Result<T, IngestError>;
 #[derive(Debug)]
 pub enum IngestError {
     InvalidConfig,
-    ThreadPool,
     Client(ClientError),
     Parse(ParserError),
     Serialize(EncoderError),
@@ -35,7 +34,6 @@ impl fmt::Display for IngestError {
                        "Supplied config.toml could not be understood. Try checking for a \
                         misspelled or missing property.")
             }
-            IngestError::ThreadPool => write!(f, "Unable to initialize thread pool."),
             IngestError::Client(ref err) => err.fmt(f),
             IngestError::Parse(ref err) => err.fmt(f),
             IngestError::Serialize(ref err) => err.fmt(f),
@@ -52,7 +50,6 @@ impl Error for IngestError {
                 "Supplied config.toml could not be understood. Try checking for a misspelled or \
                  missing property."
             }
-            IngestError::ThreadPool => "Unable to initialize thread pool.",
             IngestError::Client(ref err) => err.description(),
             IngestError::Parse(ref err) => err.description(),
             IngestError::Serialize(ref err) => err.description(),
