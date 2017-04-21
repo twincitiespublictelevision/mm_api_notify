@@ -27,6 +27,7 @@ impl APIClient for MMClient {
             .or_else(|err| {
                 match err {
                     MMCError::ResourceNotFound => {}
+                    MMCError::NotAuthorized => {}
                     _ => {
                         error!("Failed to query {} due to {}", url, err);
                     }

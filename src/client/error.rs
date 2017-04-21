@@ -20,7 +20,7 @@ impl fmt::Display for ClientError {
         match *self {
             ClientError::ConfigError => write!(f, "Invalid config was supplied"),
             ClientError::InitializationError => write!(f, "Failed to initialize the API client"),
-            _ => write!(f, ""),
+            ClientError::API(ref err) => err.fmt(f),
         }
     }
 }

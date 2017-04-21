@@ -85,7 +85,7 @@ fn main() {
             .takes_value(true)
             .number_of_values(2)
             .value_names(&["type", "id"])
-            .conflicts_with_all(&["build", "skip-update", "log-level", "start-time"])
+            .conflicts_with_all(&["build", "skip-update", "start-time"])
             .help("Queries the cache with a type and id pair and displays the payload that the \
                    runner will emit"))
         .get_matches();

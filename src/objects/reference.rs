@@ -76,6 +76,7 @@ impl Ref {
 
                         match err {
                             IngestError::Client(ClientError::API(MMCError::ResourceNotFound)) => {}
+                            IngestError::Client(ClientError::API(MMCError::NotAuthorized)) => {}
                             _ => {
                                 warn!("Failed to import {} {} due to {}",
                                       self.ref_type,
@@ -84,7 +85,7 @@ impl Ref {
                             }
                         };
 
-                        info!("{:<10} {} {:<10} due to {:?}",
+                        info!("{:<10} {} {:<10} due to {}",
                               "Skipping",
                               self.id,
                               self.ref_type,
