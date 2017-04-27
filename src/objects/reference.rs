@@ -107,6 +107,8 @@ impl Ref {
                 if runtime.config.enable_hooks && runtime.config.hooks.is_some() {
                     match runtime.config.hooks {
                         Some(ref hooks) => {
+                            info!("{:<10} {} {:<10}", "Deleting", self.id, self.ref_type);
+
                             Payload::from_ref(self)
                                 .emitter(&hooks, HttpEmitter::new)
                                 .delete()
