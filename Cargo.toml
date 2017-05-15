@@ -28,4 +28,4 @@ toml = "0.3.0"
 url = "1.2.3"
 
 [dependencies.mm_client]
-git = "ssh://git@github.com/twincitiespublictelevision/mm_client.git"
+git = "https://github.com/twincitiespublictelevision/mm_client.git"
