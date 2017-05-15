@@ -120,24 +120,18 @@ fn main() {
                     .and_then(|level| log::LogLevelFilter::from_str(level).ok())
                     .unwrap_or(log::LogLevelFilter::Warn);
 
-                let logger_config = fern::DispatchConfig {
-                    format: Box::new(|msg: &str, level: &log::LogLevel, _: &log::LogLocation| {
-                        format!("[{}][{}] {}",
-                                UTC::now()
-                                    .format("%Y-%m-%d][%H:%M:%S")
-                                    .to_string(),
-                                level,
-                                msg)
-                    }),
-                    output: vec![fern::OutputConfig::stdout(),
-                                 fern::OutputConfig::file(log_location.as_str())],
-                    level: log_level,
-                };
-
-                if let Err(e) = fern::init_global_logger(logger_config,
-                                                         log::LogLevelFilter::Trace) {
-                    panic!("Failed to initialize logger: {}", e);
-                }
+                fern::Dispatch::new()
+                    .format(|out, message, record| {
+                        out.finish(format_args!("[{}][{}] {}",
+                                                UTC::now().format("%Y-%m-%d][%H:%M:%S"),
+                                                record.level(),
+                                                message))
+                    })
+                    .level(log_level)
+                    .chain(std::io::stdout())
+                    .chain(fern::log_file(log_location.as_str()).expect("Failed to open log file"))
+                    .apply()
+                    .expect("Failed to initialize logger");
             }
 
             // Initialize the thread pools
