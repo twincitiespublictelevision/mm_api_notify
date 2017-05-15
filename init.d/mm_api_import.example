@@ -2,7 +2,7 @@
 # chkconfig: 35 20 80
 # description: Media Manager API Notifier
 
-prog="mm_api_import"
+prog="mm_api_notify"
 prog_config=/etc/sysconfig/$prog
 prog_flags="--config $prog_confg"
 exec=/usr/sbin/$prog
