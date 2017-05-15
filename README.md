@@ -5,12 +5,12 @@ PBS Media Manager system.
 
 ---
 
-### Requirements
+## Requirements
 
 1. [https://rustup.rs](Rust)
 2. [https://www.mongodb.com/](MongoDB)
 
-### Installation
+## Installation
 
 1. `git clone https://github.com/twincitiespublictelevision/mm_api_notify.git`
 2. Create a debug or release build `cargo build`
@@ -20,11 +20,11 @@ PBS Media Manager system.
 6. Initially run with the `--build` flag to build the cache for the first
 time. This can take 1-2 hours.
 
-### Configuration
+## Configuration
 
 A sample `config.toml` file is supplied in `config.toml.example`
 
-# General
+### General
 
 | Option            | Value                            |
 | ----------------- | -------------------------------- |
@@ -32,7 +32,7 @@ A sample `config.toml` file is supplied in `config.toml.example`
 | min_runtime_delta | Min time to wait between updates |
 | enable_hooks      | Global control over hooks        |
 
-# Database [db]
+### Database [db]
 
 These are the values required to connect to the MongoDB instance
 
@@ -44,7 +44,7 @@ These are the values required to connect to the MongoDB instance
 | username |
 | password |
 
-# Media Manager [mm]
+### Media Manager [mm]
 
 | Option                 | Value                                |
 | ---------------------- | ------------------------------------ |
@@ -52,13 +52,13 @@ These are the values required to connect to the MongoDB instance
 | key                    | Media Manager API secret             |
 | changelog_max_timespan | Max time allowed between update runs |
 
-# Logging [log]
+### Logging [log]
 
 | Option   | Value            |
 | -------- | ---------------- |
 | location | Path to log file |
 
-# Hooks [hooks]
+### Hooks [hooks]
 
 Hooks allow for defining urls that the service should send notifications to when
 objects in Media Manager change. Hooks can be define for each of the emitted
