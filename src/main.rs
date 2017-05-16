@@ -116,8 +116,14 @@ fn main() {
             // Initialize logging
             if let &Some(ref log_location) = &config.log.location {
 
+                let config_log_level_filter = match config.log.level {
+                    Some(ref level) => log::LogLevelFilter::from_str(level.as_str()).ok(),
+                    None => None,
+                };
+
                 let log_level = matches.value_of("log-level")
                     .and_then(|level| log::LogLevelFilter::from_str(level).ok())
+                    .or(config_log_level_filter)
                     .unwrap_or(log::LogLevelFilter::Warn);
 
                 fern::Dispatch::new()

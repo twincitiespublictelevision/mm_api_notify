@@ -1,4 +1,5 @@
 extern crate toml;
+extern crate log;
 
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -18,6 +19,7 @@ pub struct Config {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LogConfig {
     pub location: Option<String>,
+    pub level: Option<String>,
 }
 
 // Database configuration/

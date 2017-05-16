@@ -222,7 +222,10 @@ mod tests {
             },
             thread_pool_size: 0,
             min_runtime_delta: 0,
-            log: LogConfig { location: None },
+            log: LogConfig {
+                location: None,
+                level: None,
+            },
             enable_hooks: false,
             hooks: None,
         };
