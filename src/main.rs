@@ -77,7 +77,6 @@ fn main() {
             .long("log-level")
             .short("l")
             .takes_value(true)
-            .default_value("WARN")
             .help("Defines the log level to run at. Defaults to WARN"))
         .arg(Arg::with_name("query")
             .long("query")
