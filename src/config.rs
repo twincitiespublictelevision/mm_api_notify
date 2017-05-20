@@ -51,14 +51,18 @@ pub fn parse_config(path: &str) -> Option<Config> {
     let mut file = match File::open(path) {
         Ok(file) => file,
         Err(_) => {
-            panic!("Could not find config file (config.toml) at {}. See the included \
+            error!("Could not find config file at {}. See the included README and \
                     config.toml.example for configuration instructions.",
                    path);
+            return None;
         }
     };
 
     file.read_to_string(&mut config_toml)
-        .unwrap_or_else(|err| panic!("Failure while reading config: [{}]", err));
-
-    toml::from_str(&config_toml).ok()
+        .or_else(|err| {
+            error!("Failure while reading config: [{}]", err);
+            Err(err)
+        })
+        .ok()
+        .and_then(|_| toml::from_str(&config_toml).ok())
 }
