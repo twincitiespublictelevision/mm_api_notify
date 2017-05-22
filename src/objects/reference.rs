@@ -60,6 +60,24 @@ impl Ref {
         }
     }
 
+    fn delete<T: StorageEngine, S: ThreadedAPI>(&self, runtime: &Runtime<T, S>) -> ImportResult {
+        if runtime.config.enable_hooks {
+            match runtime.config.hooks {
+                Some(ref hooks) => {
+                    info!("{:<10} {} {:<10}", "Deleting", self.id, self.ref_type);
+
+                    Payload::from_ref(self)
+                        .emitter(&hooks, HttpEmitter::new)
+                        .delete()
+                        .results()
+                }
+                None => (0, 0),
+            }
+        } else {
+            (0, 0)
+        }
+    }
+
     fn import_general<T: StorageEngine, S: ThreadedAPI>(&self,
                                                         runtime: &Runtime<T, S>,
                                                         follow_refs: bool,
@@ -72,26 +90,21 @@ impl Ref {
                 utils::parse_response(runtime.api.url(self.self_url.as_str()))
                     .and_then(|json| Object::from_json(&json))
                     .and_then(|obj| Ok(obj.import(runtime, follow_refs, since)))
-                    .or_else(|err| {
+                    .or_else(|err| match err {
+                        IngestError::Client(ClientError::API(MMCError::ResourceNotFound)) => {
+                            Ok(self.delete(runtime))
+                        }
+                        IngestError::Client(ClientError::API(MMCError::NotAuthorized)) => {
+                            Ok(self.delete(runtime))
+                        }
+                        _ => {
+                            warn!("Failed to import {} {} due to {}",
+                                  self.ref_type,
+                                  self.id,
+                                  err);
 
-                        match err {
-                            IngestError::Client(ClientError::API(MMCError::ResourceNotFound)) => {}
-                            IngestError::Client(ClientError::API(MMCError::NotAuthorized)) => {}
-                            _ => {
-                                warn!("Failed to import {} {} due to {}",
-                                      self.ref_type,
-                                      self.id,
-                                      err);
-                            }
-                        };
-
-                        info!("{:<10} {} {:<10} due to {}",
-                              "Skipping",
-                              self.id,
-                              self.ref_type,
-                              err);
-
-                        Err(err)
+                            Err(err)
+                        }
                     })
             })
             .unwrap_or((0, 1))
@@ -103,23 +116,7 @@ impl Ref {
                                                           action: ImportAction)
                                                           -> ImportResult {
         match action {
-            ImportAction::Delete => {
-                if runtime.config.enable_hooks && runtime.config.hooks.is_some() {
-                    match runtime.config.hooks {
-                        Some(ref hooks) => {
-                            info!("{:<10} {} {:<10}", "Deleting", self.id, self.ref_type);
-
-                            Payload::from_ref(self)
-                                .emitter(&hooks, HttpEmitter::new)
-                                .delete()
-                                .results()
-                        }
-                        None => (0, 0),
-                    }
-                } else {
-                    (0, 0)
-                }
-            }
+            ImportAction::Delete => self.delete(runtime),
             ImportAction::Update => self.import_general(runtime, false, since),
         }
     }
