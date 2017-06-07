@@ -1,4 +1,5 @@
 # mm_api_notify
+[![CircleCI](https://circleci.com/gh/twincitiespublictelevision/mm_api_notify.svg?style=svg)](https://circleci.com/gh/twincitiespublictelevision/mm_api_notify)
 
 `mm_api_notify` is a service for emitting notifications about changes in the [PBS Media Manager](https://docs.pbs.org/display/MM) system.
 
