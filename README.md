@@ -1,28 +1,27 @@
-# mm_api_notify [![Latest Version]][crates.io]
+# mm_api_notify
 
-`mm_api_notify` is a service for emitting notifications about changes in the
-PBS Media Manager system.
+`mm_api_notify` is a service for emitting notifications about changes in the [PBS Media Manager](https://docs.pbs.org/display/MM) system.
 
 ---
 
 ## Requirements
 
-1. [https://rustup.rs](Rust)
-2. [https://www.mongodb.com/](MongoDB)
+1. [rustup](https://rustup.rs) - mm_api_notify is built in [Rust](https://www.rust-lang.org/en-US/). It is needed to compile the service, and can be installed easily with [rustup](https://rustup.rs)
+2. [MongoDB](https://www.mongodb.com/) - mm_api_notify uses [MongoDB](https://www.mongodb.com/) to store a record of the records it has seen
 
 ## Installation
 
 1. `git clone https://github.com/twincitiespublictelevision/mm_api_notify.git`
-2. Create a debug or release build `cargo build`
+2. Create a release build `cargo build --release`
 3. Use the `mm_api_import.example` sample or other scripts to create a service
 4. Move application build to the location specified in service script
-5. Create `config.toml` file (see below)
-6. Initially run with the `--build` flag to build the cache for the first
-time. This can take 1-2 hours.
+5. Create a config file based on `config.toml.example` file (see below)
+6. Initially run with the `--rebuild` flag to build the cache for the first
+time.
 
 ## Configuration
 
-A sample `config.toml` file is supplied in `config.toml.example`
+A sample config file is supplied in `config.toml.example`
 
 ### General
 
@@ -73,3 +72,18 @@ A hook consists of 1 required part and 2 optional parts.
 `{ url: required, username: optional, password: optional }`
 
 Each *type* has its own list of hooks that it should call to.
+
+## Usage
+
+--
+
+mm_api_notify watches for changes to resources via the `changelog` endpoint of [Media Manager API](https://docs.pbs.org/display/CDA/Media+Manager+API) and when it sees a change, emits it out as a **POST** or **DELETE** against the defined hooks.
+
+**POST** - Each change is emitted as a nested JSON structure containing the changed resource along with its parent chain up to a franchise.
+**DELETE** - Deletes are emitted when an element is listed as a deletion in the `changelog` or when the keys defined for the service are no longer able to access a resource (404 or 403).
+
+The binary also offers a query mode to generate emit payloads that are useful for debugging
+
+```
+mm_api_notify --query asset 0146e77a-b7c2-4492-b791-47586bb2a154
+```
