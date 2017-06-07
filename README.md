@@ -79,6 +79,7 @@ Each *type* has its own list of hooks that it should call to.
 mm_api_notify watches for changes to resources via the `changelog` endpoint of [Media Manager API](https://docs.pbs.org/display/CDA/Media+Manager+API) and when it sees a change, emits it out as a **POST** or **DELETE** against the defined hooks.
 
 **POST** - Each change is emitted as a nested JSON structure containing the changed resource along with its parent chain up to a franchise.
+
 **DELETE** - Deletes are emitted when an element is listed as a deletion in the `changelog` or when the keys defined for the service are no longer able to access a resource (404 or 403).
 
 The binary also offers a query mode to generate emit payloads that are useful for debugging
@@ -86,3 +87,9 @@ The binary also offers a query mode to generate emit payloads that are useful fo
 ```
 mm_api_notify --query asset 0146e77a-b7c2-4492-b791-47586bb2a154
 ```
+
+---
+
+### Licensing
+
+mm_api_notify is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full license text.
