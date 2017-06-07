@@ -75,8 +75,6 @@ Each *type* has its own list of hooks that it should call to.
 
 ## Usage
 
---
-
 mm_api_notify watches for changes to resources via the `changelog` endpoint of [Media Manager API](https://docs.pbs.org/display/CDA/Media+Manager+API) and when it sees a change, emits it out as a **POST** or **DELETE** against the defined hooks.
 
 **POST** - Each change is emitted as a nested JSON structure containing the changed resource along with its parent chain up to a franchise.
