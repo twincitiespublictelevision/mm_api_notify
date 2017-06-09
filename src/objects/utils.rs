@@ -28,13 +28,16 @@ pub fn map_string_to_bson_dates(bson: Bson) -> Bson {
         }
         Bson::Document(doc) => {
             Bson::Document(doc.into_iter()
-                .map(|(key, bson_val)| (key, map_string_to_bson_dates(bson_val)))
-                .collect::<bson::Document>())
+                               .map(|(key, bson_val)| {
+                                        (key, map_string_to_bson_dates(bson_val))
+                                    })
+                               .collect::<bson::Document>())
         }
         Bson::Array(elements) => {
-            Bson::Array(elements.into_iter()
-                .map(map_string_to_bson_dates)
-                .collect::<Vec<Bson>>())
+            Bson::Array(elements
+                            .into_iter()
+                            .map(map_string_to_bson_dates)
+                            .collect::<Vec<Bson>>())
         }
         x => x,
     }
@@ -47,13 +50,16 @@ pub fn map_bson_dates_to_string(bson: Bson) -> Bson {
         }
         Bson::Document(doc) => {
             Bson::Document(doc.into_iter()
-                .map(|(key, bson_val)| (key, map_bson_dates_to_string(bson_val)))
-                .collect::<bson::Document>())
+                               .map(|(key, bson_val)| {
+                                        (key, map_bson_dates_to_string(bson_val))
+                                    })
+                               .collect::<bson::Document>())
         }
         Bson::Array(elements) => {
-            Bson::Array(elements.into_iter()
-                .map(map_bson_dates_to_string)
-                .collect::<Vec<Bson>>())
+            Bson::Array(elements
+                            .into_iter()
+                            .map(map_bson_dates_to_string)
+                            .collect::<Vec<Bson>>())
         }
         x => x,
     }

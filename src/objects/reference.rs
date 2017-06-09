@@ -131,7 +131,9 @@ impl Importable for Ref {
 
         // When importing a reference we branch based on an inspection of the attributes. If this
         // a changelog reference then we prefer to use a custom import.
-        let action = self.attributes.get("action").and_then(|action| action.as_str());
+        let action = self.attributes
+            .get("action")
+            .and_then(|action| action.as_str());
 
         match action {
             Some(action_str) => {
@@ -147,23 +149,31 @@ impl Importable for Ref {
             .as_object_mut()
             .and_then(|map| {
                 let id = map.remove("id")
-                    .and_then(|id_val| id_val.as_str().and_then(|id_str| Some(id_str.to_string())));
+                    .and_then(|id_val| {
+                                  id_val.as_str().and_then(|id_str| Some(id_str.to_string()))
+                              });
 
                 let attributes = map.remove("attributes");
 
                 let attrs = attributes.clone();
 
-                let ref_type = map.remove("type").and_then(|ref_type_val| {
-                    ref_type_val.as_str().and_then(|ref_type_str| Some(ref_type_str.to_string()))
-                });
+                let ref_type = map.remove("type")
+                    .and_then(|ref_type_val| {
+                                  ref_type_val
+                                      .as_str()
+                                      .and_then(|ref_type_str| Some(ref_type_str.to_string()))
+                              });
 
                 let self_url = map.remove("links")
                     .and_then(|mut links| {
-                        links.as_object_mut()
+                        links
+                            .as_object_mut()
                             .and_then(|link_map| link_map.remove("self"))
                             .and_then(|self_val| {
-                                self_val.as_str().and_then(|self_str| Some(self_str.to_string()))
-                            })
+                                          self_val
+                                              .as_str()
+                                              .and_then(|self_str| Some(self_str.to_string()))
+                                      })
                     });
 
                 match (id, attrs, ref_type, self_url) {
@@ -219,6 +229,7 @@ mod tests {
             },
             thread_pool_size: 0,
             min_runtime_delta: 0,
+            lookback_timeframe: 0,
             log: LogConfig {
                 location: None,
                 level: None,

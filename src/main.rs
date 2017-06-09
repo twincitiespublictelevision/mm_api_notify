@@ -89,24 +89,26 @@ fn main() {
                    runner will emit"))
         .get_matches();
 
-    let config_path = if !matches.is_present("config") {
-            let info = AppInfo {
-                name: env!("CARGO_PKG_NAME"),
-                author: env!("CARGO_PKG_AUTHORS"),
-            };
+    let config_path =
+        if !matches.is_present("config") {
+                let info = AppInfo {
+                    name: env!("CARGO_PKG_NAME"),
+                    author: env!("CARGO_PKG_AUTHORS"),
+                };
 
-            let path = get_app_dir(AppDataType::UserConfig, &info, "/")
-                .and_then(|mut path| {
-                    path.push("config.toml");
-                    Ok(path)
-                })
-                .expect("Failed to run. Unable to determine path default config location.");
+                let path =
+                    get_app_dir(AppDataType::UserConfig, &info, "/")
+                        .and_then(|mut path| {
+                                      path.push("config.toml");
+                                      Ok(path)
+                                  })
+                        .expect("Failed to run. Unable to determine path default config location.");
 
-            path.to_str().map(|str| str.to_string())
-        } else {
-            matches.value_of("config").map(|str| str.to_string())
-        }
-        .expect("Failed to run. Unable to parse path to default config location.");
+                path.to_str().map(|str| str.to_string())
+            } else {
+                matches.value_of("config").map(|str| str.to_string())
+            }
+            .expect("Failed to run. Unable to parse path to default config location.");
 
     let conf_res = parse_config(config_path.as_str())
         .ok_or(IngestError::InvalidConfig)
@@ -120,18 +122,19 @@ fn main() {
                     None => None,
                 };
 
-                let log_level = matches.value_of("log-level")
+                let log_level = matches
+                    .value_of("log-level")
                     .and_then(|level| log::LogLevelFilter::from_str(level).ok())
                     .or(config_log_level_filter)
                     .unwrap_or(log::LogLevelFilter::Warn);
 
                 fern::Dispatch::new()
                     .format(|out, message, record| {
-                        out.finish(format_args!("[{}][{}] {}",
+                                out.finish(format_args!("[{}][{}] {}",
                                                 UTC::now().format("%Y-%m-%d][%H:%M:%S"),
                                                 record.level(),
                                                 message))
-                    })
+                            })
                     .level(log_level)
                     .chain(std::io::stdout())
                     .chain(fern::log_file(log_location.as_str()).expect("Failed to open log file"))
@@ -171,9 +174,12 @@ fn main() {
                             _ => println!("Could not find the requested object in the cache."),
                         };
                     } else {
-                        let time_arg = matches.value_of("start-time").map_or(0, |arg| {
-                            arg.parse::<i64>().expect("Could not parse start time")
-                        });
+                        let time_arg =
+                            matches
+                                .value_of("start-time")
+                                .map_or(0, |arg| {
+                                    arg.parse::<i64>().expect("Could not parse start time")
+                                });
 
                         let build_res = if matches.is_present("build") {
                             run_build(&runtime, time_arg).ok()
@@ -185,18 +191,15 @@ fn main() {
 
                             let now = UTC::now().timestamp();
 
-                            let update_start_time = if time_arg <
-                                                       (now -
-                                                        runtime.config.mm.changelog_max_timespan) {
-                                compute_update_start_time(runtime.store.updated_at(),
+                            let update_start_time =
+                                if time_arg < (now - runtime.config.mm.changelog_max_timespan) {
+                                    compute_update_start_time(runtime.store.updated_at(),
                                                           runtime.config.mm.changelog_max_timespan)
-                            } else {
-                                time_arg + build_res.map_or(0, |(dur, _)| dur.num_seconds())
-                            };
+                                } else {
+                                    time_arg + build_res.map_or(0, |(dur, _)| dur.num_seconds())
+                                };
 
-                            run_update_loop(&runtime,
-                                            update_start_time,
-                                            runtime.config.min_runtime_delta)
+                            run_update_loop(&runtime, update_start_time)
                         };
                     }
 
@@ -244,8 +247,7 @@ fn compute_update_start_time(last_updated_at: Option<i64>, max_timespan: i64) ->
 }
 
 fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
-                                                     run_start_time: i64,
-                                                     delta: i64) {
+                                                     run_start_time: i64) {
     let mut import_start_time = run_start_time;
     let mut import_completion_time = UTC::now().timestamp();
     let mut next_run_time = run_start_time;
@@ -258,7 +260,8 @@ fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
     loop {
         if UTC::now().timestamp() > next_run_time {
 
-            next_run_time = UTC::now().timestamp() + delta;
+            next_run_time = UTC::now().timestamp() + runtime.config.min_runtime_delta -
+                            runtime.config.lookback_timeframe;
 
             let run_time = run_update(runtime, import_start_time);
 
@@ -306,10 +309,11 @@ fn import_response<T: StorageEngine, S: ThreadedAPI>(response: ClientResult<Stri
         Err(err) => Err(IngestError::Client(err)),
     };
 
-    collection.and_then(|coll| {
-            let res = coll.import(runtime, true, run_start_time);
-            Ok((UTC::now() - start_time, res))
-        })
+    collection
+        .and_then(|coll| {
+                      let res = coll.import(runtime, true, run_start_time);
+                      Ok((UTC::now() - start_time, res))
+                  })
         .or(Ok((Duration::seconds(0), (0, 1))))
 }
 

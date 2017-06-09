@@ -51,12 +51,15 @@ impl Object {
                 _ => None,
             }
             .and_then(|parent_key| {
-                self.attributes.get(parent_key).and_then(|parent| Ref::from_json(parent).ok())
-            })
+                          self.attributes
+                              .get(parent_key)
+                              .and_then(|parent| Ref::from_json(parent).ok())
+                      })
             .and_then(|parent_ref| {
-                store.get(parent_ref.id.as_str(), parent_ref.ref_type.as_str())
-                    .and_then(|res| res.ok())
-            })
+                          store
+                              .get(parent_ref.id.as_str(), parent_ref.ref_type.as_str())
+                              .and_then(|res| res.ok())
+                      })
     }
 
     pub fn from_bson(bson: Bson) -> IngestResult<Object> {
@@ -96,7 +99,8 @@ impl Object {
             _ => vec![],
         };
 
-        child_types.par_iter()
+        child_types
+            .par_iter()
             .map(|child_type| {
                 self.child_collection(&runtime.api, child_type)
                     .and_then(|child_collection| {
@@ -133,15 +137,16 @@ impl Object {
             _ => vec![],
         };
 
-        parent_types.par_iter()
+        parent_types
+            .par_iter()
             .map(|parent_type| match self.attributes.get(parent_type) {
-                Some(parent_obj) => {
-                    Ref::from_json(parent_obj)
-                        .and_then(|refr| Ok(refr.import(runtime, false, since)))
-                        .unwrap_or((0, 1))
-                }
-                _ => (0, 0),
-            })
+                     Some(parent_obj) => {
+                         Ref::from_json(parent_obj)
+                             .and_then(|refr| Ok(refr.import(runtime, false, since)))
+                             .unwrap_or((0, 1))
+                     }
+                     _ => (0, 0),
+                 })
             .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2))
     }
 }
@@ -175,15 +180,16 @@ impl Importable for Object {
             if res.is_ok() && runtime.config.enable_hooks && runtime.config.hooks.is_some() {
                 Payload::from_object(self, &runtime.store)
                     .and_then(|payload| {
-                        runtime.config
+                        runtime
+                            .config
                             .hooks
                             .as_ref()
                             .map(|hooks| payload.emitter(&hooks, HttpEmitter::new).update())
                     })
                     .or_else(|| {
-                        error!("Failed to create payload from {}", self);
-                        None
-                    });
+                                 error!("Failed to create payload from {}", self);
+                                 None
+                             });
             };
 
             match res {
@@ -213,29 +219,46 @@ impl Importable for Object {
 
         let mut source = json.clone();
 
-        let id = source.get("data").and_then(|data| {
-            data.get("id")
-                .and_then(|id| id.as_str().and_then(|id_str| Some(id_str.to_string())))
-        });
+        let id =
+            source
+                .get("data")
+                .and_then(|data| {
+                    data.get("id")
+                        .and_then(|id| id.as_str().and_then(|id_str| Some(id_str.to_string())))
+                });
 
-        let obj_type = source.get("data").and_then(|data| {
-            data.get("type")
-                .and_then(|o_type| o_type.as_str().and_then(|type_str| Some(type_str.to_string())))
-        });
+        let obj_type = source
+            .get("data")
+            .and_then(|data| {
+                          data.get("type")
+                              .and_then(|o_type| {
+                                            o_type
+                                                .as_str()
+                                                .and_then(|type_str| Some(type_str.to_string()))
+                                        })
+                      });
 
-        source.as_object_mut()
+        source
+            .as_object_mut()
             .and_then(|map| {
 
-                let attrs = map.remove("data").and_then(|mut data| {
-                    data.as_object_mut().and_then(|data_map| data_map.remove("attributes"))
-                });
+                let attrs = map.remove("data")
+                    .and_then(|mut data| {
+                                  data.as_object_mut()
+                                      .and_then(|data_map| data_map.remove("attributes"))
+                              });
 
-                let self_url = map.remove("links").and_then(|mut data| {
-                    data.as_object_mut()
-                        .and_then(|data_map| {
-                            data_map.remove("self").unwrap().as_str().map(|s| s.to_string())
-                        })
-                });
+                let self_url = map.remove("links")
+                    .and_then(|mut data| {
+                        data.as_object_mut()
+                            .and_then(|data_map| {
+                                          data_map
+                                              .remove("self")
+                                              .unwrap()
+                                              .as_str()
+                                              .map(|s| s.to_string())
+                                      })
+                    });
 
                 match (id, attrs, obj_type, self_url) {
                     (Some(p1), Some(p2), Some(p3), Some(p4)) => Some(Object::new(p1, p2, p3, p4)),
@@ -291,6 +314,7 @@ mod tests {
             },
             thread_pool_size: 0,
             min_runtime_delta: 0,
+            lookback_timeframe: 0,
             log: LogConfig {
                 location: None,
                 level: None,
@@ -478,7 +502,9 @@ mod tests {
         let mut runtime = void_runtime();
         runtime.config.enable_hooks = true;
         runtime.config.hooks = Some(config);
-        runtime.store.set_response(Object::from_json(&obj_json).unwrap());
+        runtime
+            .store
+            .set_response(Object::from_json(&obj_json).unwrap());
 
         let obj = Object::from_json(&obj_json).unwrap();
         let test_res = obj.import(&runtime, false, 0);
@@ -513,7 +539,9 @@ mod tests {
         let mut runtime = void_runtime();
         runtime.config.enable_hooks = true;
         runtime.config.hooks = Some(config);
-        runtime.store.set_response(Object::from_json(&obj_json).unwrap());
+        runtime
+            .store
+            .set_response(Object::from_json(&obj_json).unwrap());
 
         let obj = Object::from_json(&obj_json).unwrap();
         let test_res = obj.import(&runtime, false, UTC::now().timestamp());

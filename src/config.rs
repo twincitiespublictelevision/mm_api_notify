@@ -11,6 +11,7 @@ pub struct Config {
     pub mm: APIConfig,
     pub thread_pool_size: usize,
     pub min_runtime_delta: i64,
+    pub lookback_timeframe: i64,
     pub log: LogConfig,
     pub enable_hooks: bool,
     pub hooks: Option<HookConfig>,
@@ -60,9 +61,9 @@ pub fn parse_config(path: &str) -> Option<Config> {
 
     file.read_to_string(&mut config_toml)
         .or_else(|err| {
-            error!("Failure while reading config: [{}]", err);
-            Err(err)
-        })
+                     error!("Failure while reading config: [{}]", err);
+                     Err(err)
+                 })
         .ok()
         .and_then(|_| toml::from_str(&config_toml).ok())
 }

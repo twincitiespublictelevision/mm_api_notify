@@ -97,7 +97,7 @@ mod tests {
                               Json::Bool(true),
                               Json::String("attr".to_string()),
                               Json::Array(vec![])]
-            .into_iter();
+                .into_iter();
 
         for json_type in json_types {
             let obj = Object::new(obj_id.clone(),

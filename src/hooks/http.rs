@@ -18,7 +18,11 @@ pub struct HttpEmitter<'a, 'b> {
 
 impl<'a, 'b> HttpEmitter<'a, 'b> {
     fn payload_type(&self) -> &str {
-        self.payload.data.get("type").and_then(|type_json| type_json.as_str()).unwrap_or("")
+        self.payload
+            .data
+            .get("type")
+            .and_then(|type_json| type_json.as_str())
+            .unwrap_or("")
     }
 
     fn hooks(&self) -> Option<&Vec<BTreeMap<String, String>>> {
@@ -31,23 +35,24 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
             .unwrap_or(&vec![])
             .iter()
             .filter_map(|hook| {
-                hook.get("url").map(|base_url| {
-                    let user = hook.get("username")
-                        .map(|user_ref| user_ref.to_owned())
-                        .unwrap_or("".to_string());
-                    let pass = hook.get("password").map(|pass_ref| pass_ref.to_owned());
+                hook.get("url")
+                    .map(|base_url| {
+                        let user = hook.get("username")
+                            .map(|user_ref| user_ref.to_owned())
+                            .unwrap_or("".to_string());
+                        let pass = hook.get("password").map(|pass_ref| pass_ref.to_owned());
 
-                    let mut url = base_url.clone();
+                        let mut url = base_url.clone();
 
-                    if method == EmitAction::Delete {
-                        if let &Json::String(ref id) = &self.payload.data["id"] {
-                            url.push_str(id);
-                            url.push('/');
+                        if method == EmitAction::Delete {
+                            if let &Json::String(ref id) = &self.payload.data["id"] {
+                                url.push_str(id);
+                                url.push('/');
+                            }
                         }
-                    }
 
-                    (url, user, pass)
-                })
+                        (url, user, pass)
+                    })
             })
             .map(|(url, user, pass)| {
                 let status = match http_client() {
@@ -57,15 +62,17 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
                                 EmitAction::Update => client.post(url.as_str()),
                             }
                             .header(Authorization(Basic {
-                                username: user,
-                                password: pass,
-                            }))
+                                                      username: user,
+                                                      password: pass,
+                                                  }))
                             .json(&self.payload);
 
-                        req.send().ok().map_or_else(|| false, |resp| match resp.status() {
-                            &StatusCode::Ok => true,
-                            _ => false,
-                        })
+                        req.send()
+                            .ok()
+                            .map_or_else(|| false, |resp| match resp.status() {
+                                &StatusCode::Ok => true,
+                                _ => false,
+                            })
                     }
                     None => false,
                 };

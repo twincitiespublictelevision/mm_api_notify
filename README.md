@@ -26,11 +26,12 @@ A sample config file is supplied in `config.toml.example`
 
 ### General
 
-| Option            | Value                            |
-| ----------------- | -------------------------------- |
-| thread_pool_size  | Max number of threads to use     |
-| min_runtime_delta | Min time to wait between updates |
-| enable_hooks      | Global control over hooks        |
+| Option             | Value                                         |
+| ------------------ | --------------------------------------------- |
+| thread_pool_size   | Max number of threads to use                  |
+| min_runtime_delta  | Min seconds to wait between updates           |
+| lookback_timeframe | Number of seconds to look back during updates |
+| enable_hooks       | Global control over hooks                     |
 
 ### Database [db]
 

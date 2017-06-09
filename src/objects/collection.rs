@@ -60,11 +60,13 @@ impl Importable for Collection {
         self.links
             .get("first")
             .and_then(|first_url| {
-                first_url.as_str().and_then(|base_url| {
-                    Some((1..num_pages)
-                        .collect::<Vec<usize>>()
-                        .par_iter()
-                        .map(|page_num| {
+                first_url
+                    .as_str()
+                    .and_then(|base_url| {
+                        Some((1..num_pages)
+                                 .collect::<Vec<usize>>()
+                                 .par_iter()
+                                 .map(|page_num| {
                             let mut page_url = String::new();
                             page_url.push_str(base_url);
                             page_url.push(if base_url.contains('?') { '&' } else { '?' });
@@ -73,12 +75,14 @@ impl Importable for Collection {
 
                             self.get_collection(&runtime.api, page_url.as_str())
                                 .and_then(|collection| {
-                                    Ok(collection.import_page(runtime, follow_refs, since))
-                                })
+                                              Ok(collection.import_page(runtime,
+                                                                        follow_refs,
+                                                                        since))
+                                          })
                                 .unwrap_or((0, 1))
                         })
-                        .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2)))
-                })
+                                 .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2)))
+                    })
             })
             .or_else(|| Some(self.import_page(runtime, follow_refs, since)))
             .unwrap_or((0, 1))
@@ -86,37 +90,49 @@ impl Importable for Collection {
 
     fn from_json(json: &Json) -> IngestResult<Collection> {
 
-        let json_chunks = json.as_object()
-            .and_then(|map| Some((map.get("data"), map.get("links"), map.get("meta"))));
+        let json_chunks =
+            json.as_object()
+                .and_then(|map| Some((map.get("data"), map.get("links"), map.get("meta"))));
 
         match json_chunks {
                 Some((Some(data), Some(links), Some(meta))) => {
-                    let pagination_data = meta.as_object().and_then(|meta_map| {
-                        meta_map.get("pagination").and_then(|pagination| {
-                            pagination.as_object().and_then(|pagination_map| {
-                                Some((pagination_map.get("per_page")
-                                          .and_then(|per_page| per_page.as_u64()),
-                                      pagination_map.get("count").and_then(|total| total.as_u64())))
-                            })
-                        })
-                    });
+                    let pagination_data = meta.as_object()
+                        .and_then(|meta_map| {
+                            meta_map
+                                .get("pagination")
+                                .and_then(|pagination| {
+                                    pagination
+                                        .as_object()
+                                        .and_then(|pagination_map| {
+                                            Some((pagination_map
+                                                      .get("per_page")
+                                                      .and_then(|per_page| per_page.as_u64()),
+                                                  pagination_map.get("count").and_then(|total| {
+                                                total.as_u64()
+                                            })))
+                                        })
+                                })
+                        });
 
                     data.as_array()
                         .and_then(|data_list| {
-                            Some(data_list.iter()
-                                .filter_map(|item| Ref::from_json(item).ok())
-                                .collect::<Vec<Ref>>())
-                        })
+                                      Some(data_list
+                                               .iter()
+                                               .filter_map(|item| Ref::from_json(item).ok())
+                                               .collect::<Vec<Ref>>())
+                                  })
                         .and_then(|items| match pagination_data {
-                            Some((Some(per_page), Some(total))) => Some((items, per_page, total)),
-                            _ => None,
-                        })
+                                      Some((Some(per_page), Some(total))) => {
+                                          Some((items, per_page, total))
+                                      }
+                                      _ => None,
+                                  })
                         .and_then(|(items, per_page, total)| {
-                            Some(Collection::new(items,
-                                                 links.clone(),
-                                                 per_page as usize,
-                                                 total as usize))
-                        })
+                                      Some(Collection::new(items,
+                                                           links.clone(),
+                                                           per_page as usize,
+                                                           total as usize))
+                                  })
                 }
                 _ => None,
             }
@@ -156,8 +172,10 @@ mod tests {
             .as_array()
             .unwrap()
             .to_vec();
-        let refs: Vec<Ref> =
-            items.iter().filter_map(|item| Ref::from_json(item).ok()).collect::<Vec<Ref>>();
+        let refs: Vec<Ref> = items
+            .iter()
+            .filter_map(|item| Ref::from_json(item).ok())
+            .collect::<Vec<Ref>>();
         let links = serde_json::from_str("{}").unwrap();
         let coll1 = Collection::new(refs, links, 2, 26);
 
@@ -213,6 +231,7 @@ mod tests {
             },
             thread_pool_size: 0,
             min_runtime_delta: 0,
+            lookback_timeframe: 0,
             log: LogConfig {
                 location: None,
                 level: None,
