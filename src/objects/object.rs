@@ -187,9 +187,9 @@ impl Importable for Object {
                             .map(|hooks| payload.emitter(&hooks, HttpEmitter::new).update())
                     })
                     .or_else(|| {
-                                 error!("Failed to create payload from {}", self);
-                                 None
-                             });
+                        error!("Failed to create payload from {}", self);
+                        None
+                    });
             };
 
             match res {

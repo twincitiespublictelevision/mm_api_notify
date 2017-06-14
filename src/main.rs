@@ -260,8 +260,13 @@ fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
     loop {
         if UTC::now().timestamp() > next_run_time {
 
-            next_run_time = UTC::now().timestamp() + runtime.config.min_runtime_delta -
-                            runtime.config.lookback_timeframe;
+            next_run_time = UTC::now().timestamp() + runtime.config.min_runtime_delta;
+
+            import_start_time = import_start_time - runtime.config.lookback_timeframe;
+
+            info!("Starting update run from {} : {}",
+                  run_start_time,
+                  NaiveDateTime::from_timestamp(import_start_time, 0));
 
             let run_time = run_update(runtime, import_start_time);
 
