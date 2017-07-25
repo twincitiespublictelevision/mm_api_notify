@@ -3,6 +3,8 @@ jobs:
   checkout:
     docker:
       - image: liuchong/rustup:stable
+        environment:
+          OPENSSL_LIB_DIR: /usr/local/ssl
     steps:
       - checkout
   test:
@@ -17,6 +19,7 @@ jobs:
       - image: scorpil/rust:stable
     steps:
       - checkout
+
       - run: cargo build --release
 
 workflows:
