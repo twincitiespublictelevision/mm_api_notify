@@ -4,29 +4,20 @@ jobs:
     docker:
       - image: liuchong/rustup:stable
     steps:
-      - restore_cache:
-          key: repo-{{ .Branch }}
       - checkout
-      - run: echo $CIRCLE_SHA1 > .circle-sha
-      - save_cache:
-          key: repo-{{ .Branch }}-{{ checksum ".circle-sha" }}
-          paths:
-            - ~/project
   test:
     docker:
       - image: liuchong/rustup:stable
     steps:
-      - restore_cache:
-          key: repo-{{ .Branch }}
-    run: cargo test
+      - checkout
+      - run: cargo test
 
   build:
     docker:
       - image: scorpil/rust:stable
     steps:
-      - restore_cache:
-          key: repo-{{ .Branch }}
-    run: cargo build --release
+      - checkout
+      - run: cargo build --release
 
 workflows:
   version: 2
