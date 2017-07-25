@@ -1,4 +1,4 @@
-version: 3
+version: 2
 jobs:
   checkout:
     docker:
@@ -19,7 +19,6 @@ jobs:
       - image: scorpil/rust:stable
     steps:
       - checkout
-
       - run: cargo build --release
 
 workflows:
