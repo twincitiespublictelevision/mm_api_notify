@@ -2,7 +2,7 @@ version: 2
 jobs:
   checkout:
     docker:
-      - image: scorpil/rust:stable
+      - image: liuchong/rustup:stable
     steps:
       - restore_cache:
           key: repo-{{ .Branch }}
@@ -14,7 +14,7 @@ jobs:
             - ~/project
   test:
     docker:
-      - image: scorpil/rust:stable
+      - image: liuchong/rustup:stable
     steps:
       - restore_cache:
           key: repo-{{ .Branch }}
