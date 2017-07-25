@@ -12,21 +12,21 @@ jobs:
           key: repo-{{ .Branch }}-{{ checksum ".circle-sha" }}
           paths:
             - ~/project
-    test:
-      docker:
-        - image: scorpil/rust:stable
-      steps:
-        - restore_cache:
-            key: repo-{{ .Branch }}
-      run: cargo test
+  test:
+    docker:
+      - image: scorpil/rust:stable
+    steps:
+      - restore_cache:
+          key: repo-{{ .Branch }}
+    run: cargo test
 
-    build:
-      docker:
-        - image: scorpil/rust:stable
-      steps:
-        - restore_cache:
-            key: repo-{{ .Branch }}
-      run: cargo build --release
+  build:
+    docker:
+      - image: scorpil/rust:stable
+    steps:
+      - restore_cache:
+          key: repo-{{ .Branch }}
+    run: cargo build --release
 
 workflows:
   version: 2
