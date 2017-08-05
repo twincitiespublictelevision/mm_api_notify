@@ -35,44 +35,43 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
             .unwrap_or(&vec![])
             .iter()
             .filter_map(|hook| {
-                hook.get("url")
-                    .map(|base_url| {
-                        let user = hook.get("username")
-                            .map(|user_ref| user_ref.to_owned())
-                            .unwrap_or("".to_string());
-                        let pass = hook.get("password").map(|pass_ref| pass_ref.to_owned());
+                hook.get("url").map(|base_url| {
+                    let user = hook.get("username")
+                        .map(|user_ref| user_ref.to_owned())
+                        .unwrap_or("".to_string());
+                    let pass = hook.get("password").map(|pass_ref| pass_ref.to_owned());
 
-                        let mut url = base_url.clone();
+                    let mut url = base_url.clone();
 
-                        if method == EmitAction::Delete {
-                            if let &Json::String(ref id) = &self.payload.data["id"] {
-                                url.push_str(id);
-                                url.push('/');
-                            }
+                    if method == EmitAction::Delete {
+                        if let &Json::String(ref id) = &self.payload.data["id"] {
+                            url.push_str(id);
+                            url.push('/');
                         }
+                    }
 
-                        (url, user, pass)
-                    })
+                    (url, user, pass)
+                })
             })
             .map(|(url, user, pass)| {
                 let status = match http_client() {
                     Some(client) => {
                         let req = match method {
-                                EmitAction::Delete => client.request(Method::Delete, url.as_str()),
-                                EmitAction::Update => client.post(url.as_str()),
-                            }
-                            .header(Authorization(Basic {
-                                                      username: user,
-                                                      password: pass,
-                                                  }))
+                            EmitAction::Delete => client.request(Method::Delete, url.as_str()),
+                            EmitAction::Update => client.post(url.as_str()),
+                        }.header(Authorization(Basic {
+                            username: user,
+                            password: pass,
+                        }))
                             .json(&self.payload);
 
-                        req.send()
-                            .ok()
-                            .map_or_else(|| false, |resp| match resp.status() {
+                        req.send().ok().map_or_else(
+                            || false,
+                            |resp| match resp.status() {
                                 &StatusCode::Ok => true,
                                 _ => false,
-                            })
+                            },
+                        )
                     }
                     None => false,
                 };
@@ -132,7 +131,7 @@ mod tests {
     fn emits_update() {
         let test_response = String::from("{\"name\":\"value\"}");
 
-        mock("POST", "/http_emit_update_test/")
+        let _m = mock("POST", "/http_emit_update_test/")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(test_response.as_str())
@@ -158,7 +157,8 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        }) {
+        })
+        {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn emits_delete() {
-        mock("DELETE", "/http_emit_delete_test/test-child/")
+        let _m = mock("DELETE", "/http_emit_delete_test/test-child/")
             .with_status(200)
             .with_header("content-type", "application/json")
             .create();
@@ -206,7 +206,8 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        }) {
+        })
+        {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -228,13 +229,13 @@ mod tests {
     fn calls_all_hooks_for_type() {
         let test_response = String::from("{\"name\":\"value\"}");
 
-        mock("POST", "/http_calls_all_hooks_for_type_test/")
+        let _m = mock("POST", "/http_calls_all_hooks_for_type_test/")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(test_response.as_str())
             .create();
 
-        mock("POST", "/http_calls_all_hooks_for_type_test_2/")
+        let _m = mock("POST", "/http_calls_all_hooks_for_type_test_2/")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(test_response.as_str())
@@ -266,7 +267,8 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        }) {
+        })
+        {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -285,7 +287,7 @@ mod tests {
     fn only_calls_hooks_for_type() {
         let test_response = String::from("{\"name\":\"value\"}");
 
-        mock("POST", "/http_only_calls_hooks_for_type_test/")
+        let _m = mock("POST", "/http_only_calls_hooks_for_type_test/")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(test_response.as_str())
@@ -318,7 +320,8 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        }) {
+        })
+        {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -337,7 +340,7 @@ mod tests {
     fn skips_hooks_without_url() {
         let test_response = String::from("{\"name\":\"value\"}");
 
-        mock("POST", "/http_skips_hooks_without_url_test/")
+        let _m = mock("POST", "/http_skips_hooks_without_url_test/")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(test_response.as_str())
@@ -359,7 +362,8 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        }) {
+        })
+        {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -378,7 +382,7 @@ mod tests {
     fn handles_hooks_without_auth() {
         let test_response = String::from("{\"name\":\"value\"}");
 
-        mock("POST", "/http_handles_hooks_without_auth_test/")
+        let _m = mock("POST", "/http_handles_hooks_without_auth_test/")
             .with_status(200)
             .with_header("content-type", "application/json")
             .with_body(test_response.as_str())
@@ -404,7 +408,8 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        }) {
+        })
+        {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -423,7 +428,7 @@ mod tests {
     fn handles_hooks_with_auth() {
         let test_response = String::from("{\"name\":\"value\"}");
 
-        mock("POST", "/http_handles_hooks_with_auth_test/")
+        let _m = mock("POST", "/http_handles_hooks_with_auth_test/")
             .match_header("Authorization", "Basic aGVsbG86d29ybGQ=")
             .with_status(200)
             .with_header("content-type", "application/json")
@@ -452,7 +457,8 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        }) {
+        })
+        {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -471,7 +477,7 @@ mod tests {
     fn emits_json_content_type_header() {
         let test_response = String::from("{\"name\":\"value\"}");
 
-        mock("POST", "/http_emits_json_content_type_header_test/")
+        let _m = mock("POST", "/http_emits_json_content_type_header_test/")
             .match_header("content-type", "application/json")
             .with_status(200)
             .with_header("content-type", "application/json")
@@ -498,7 +504,8 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        }) {
+        })
+        {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 

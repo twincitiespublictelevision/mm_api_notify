@@ -51,10 +51,12 @@ impl Ref {
 
     fn as_object(&self) -> IngestResult<Object> {
         if self.ref_type.as_str() == "asset" && self.attributes["parent_tree"] != Json::Null {
-            Ok(Object::new(self.id.clone(),
-                           self.attributes.clone(),
-                           self.ref_type.clone(),
-                           self.self_url.clone()))
+            Ok(Object::new(
+                self.id.clone(),
+                self.attributes.clone(),
+                self.ref_type.clone(),
+                self.self_url.clone(),
+            ))
         } else {
             Err(IngestError::InvalidObjDataError)
         }
@@ -78,11 +80,12 @@ impl Ref {
         }
     }
 
-    fn import_general<T: StorageEngine, S: ThreadedAPI>(&self,
-                                                        runtime: &Runtime<T, S>,
-                                                        follow_refs: bool,
-                                                        since: i64)
-                                                        -> ImportResult {
+    fn import_general<T: StorageEngine, S: ThreadedAPI>(
+        &self,
+        runtime: &Runtime<T, S>,
+        follow_refs: bool,
+        since: i64,
+    ) -> ImportResult {
 
         self.as_object()
             .and_then(|obj| Ok(obj.import(runtime, follow_refs, since)))
@@ -98,10 +101,12 @@ impl Ref {
                             Ok(self.delete(runtime))
                         }
                         _ => {
-                            warn!("Failed to import {} {} due to {}",
-                                  self.ref_type,
-                                  self.id,
-                                  err);
+                            warn!(
+                                "Failed to import {} {} due to {}",
+                                self.ref_type,
+                                self.id,
+                                err
+                            );
 
                             Err(err)
                         }
@@ -110,11 +115,12 @@ impl Ref {
             .unwrap_or((0, 1))
     }
 
-    fn import_changelog<T: StorageEngine, S: ThreadedAPI>(&self,
-                                                          runtime: &Runtime<T, S>,
-                                                          since: i64,
-                                                          action: ImportAction)
-                                                          -> ImportResult {
+    fn import_changelog<T: StorageEngine, S: ThreadedAPI>(
+        &self,
+        runtime: &Runtime<T, S>,
+        since: i64,
+        action: ImportAction,
+    ) -> ImportResult {
         match action {
             ImportAction::Delete => self.delete(runtime),
             ImportAction::Update => self.import_general(runtime, false, since),
@@ -123,17 +129,18 @@ impl Ref {
 }
 
 impl Importable for Ref {
-    fn import<T: StorageEngine, S: ThreadedAPI>(&self,
-                                                runtime: &Runtime<T, S>,
-                                                follow_refs: bool,
-                                                since: i64)
-                                                -> ImportResult {
+    fn import<T: StorageEngine, S: ThreadedAPI>(
+        &self,
+        runtime: &Runtime<T, S>,
+        follow_refs: bool,
+        since: i64,
+    ) -> ImportResult {
 
         // When importing a reference we branch based on an inspection of the attributes. If this
         // a changelog reference then we prefer to use a custom import.
-        let action = self.attributes
-            .get("action")
-            .and_then(|action| action.as_str());
+        let action = self.attributes.get("action").and_then(
+            |action| action.as_str(),
+        );
 
         match action {
             Some(action_str) => {
@@ -148,33 +155,30 @@ impl Importable for Ref {
         json.clone()
             .as_object_mut()
             .and_then(|map| {
-                let id = map.remove("id")
-                    .and_then(|id_val| {
-                                  id_val.as_str().and_then(|id_str| Some(id_str.to_string()))
-                              });
+                let id = map.remove("id").and_then(|id_val| {
+                    id_val.as_str().and_then(|id_str| Some(id_str.to_string()))
+                });
 
                 let attributes = map.remove("attributes");
 
                 let attrs = attributes.clone();
 
-                let ref_type = map.remove("type")
-                    .and_then(|ref_type_val| {
-                                  ref_type_val
-                                      .as_str()
-                                      .and_then(|ref_type_str| Some(ref_type_str.to_string()))
-                              });
+                let ref_type = map.remove("type").and_then(|ref_type_val| {
+                    ref_type_val.as_str().and_then(|ref_type_str| {
+                        Some(ref_type_str.to_string())
+                    })
+                });
 
-                let self_url = map.remove("links")
-                    .and_then(|mut links| {
-                        links
-                            .as_object_mut()
-                            .and_then(|link_map| link_map.remove("self"))
-                            .and_then(|self_val| {
-                                          self_val
-                                              .as_str()
-                                              .and_then(|self_str| Some(self_str.to_string()))
-                                      })
-                    });
+                let self_url = map.remove("links").and_then(|mut links| {
+                    links
+                        .as_object_mut()
+                        .and_then(|link_map| link_map.remove("self"))
+                        .and_then(|self_val| {
+                            self_val.as_str().and_then(
+                                |self_str| Some(self_str.to_string()),
+                            )
+                        })
+                });
 
                 match (id, attrs, ref_type, self_url) {
                     (Some(p1), Some(p2), Some(p3), Some(p4)) => Some(Ref::new(p1, p2, p3, p4)),
@@ -256,10 +260,12 @@ mod tests {
             }
         });
 
-        let test_ref = Ref::new("test-id".to_string(),
-                                Json::Object(Map::new()),
-                                "show".to_string(),
-                                "http://0.0.0.0/test".to_string());
+        let test_ref = Ref::new(
+            "test-id".to_string(),
+            Json::Object(Map::new()),
+            "show".to_string(),
+            "http://0.0.0.0/test".to_string(),
+        );
 
         assert_eq!(test_ref, Ref::from_json(&ref_json).unwrap())
     }
@@ -338,10 +344,12 @@ mod tests {
         let mut runtime = void_runtime();
         runtime.api.set_response(test_resp.to_string());
 
-        let test_ref = Ref::new("test-id".to_string(),
-                                Json::Object(Map::new()),
-                                "show".to_string(),
-                                "http://0.0.0.0/test".to_string());
+        let test_ref = Ref::new(
+            "test-id".to_string(),
+            Json::Object(Map::new()),
+            "show".to_string(),
+            "http://0.0.0.0/test".to_string(),
+        );
 
         test_ref.import(&runtime, false, 0);
 
@@ -352,19 +360,20 @@ mod tests {
 
     #[test]
     fn emits_delete() {
-        mock("DELETE", "/reference_emit_delete/test-id/")
+        let _m = mock("DELETE", "/reference_emit_delete/test-id/")
             .with_status(200)
-            .with_header("content-type", "application/json")
             .create();
 
-        let e = "http://0.0.0.0:1234/reference_emit_delete/".to_string();
+        let e = "http://127.0.0.1:1234/reference_emit_delete/".to_string();
 
         let mut hook = BTreeMap::new();
         hook.insert("url".to_string(), e);
 
         let mut config = BTreeMap::new();
-        config.insert("show".to_string(),
-                      vec![hook.clone(), hook.clone(), hook.clone()]);
+        config.insert(
+            "show".to_string(),
+            vec![hook.clone(), hook.clone(), hook.clone()],
+        );
 
         let ref_json = json!({
             "id": "test-id",
