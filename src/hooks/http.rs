@@ -175,8 +175,46 @@ mod tests {
 
     #[test]
     fn update_contains_object() {
-        // Waiting on mockito update
-        unimplemented!()
+        let payload_data = json!({
+            "id": "test-child",
+            "type": "show",
+            "updated_at": "2017-01-01T00:00:00Z",
+            "parent": {
+                "id": "test-parent",
+                "parent": null,
+                "updated_at": "2017-01-01T00:00:00Z",
+                "type": "franchise"
+            }
+        });
+
+        let req_data = json!({
+            "data": payload_data
+        });
+
+        let _m = mock("POST", "/http_update_contains_object_test/")
+            .with_status(200)
+            .match_body(req_data.to_string().as_str())
+            .create();
+
+        let mut endpoint = mockito::SERVER_URL.to_string();
+        endpoint.push_str("/http_update_contains_object_test/");
+
+        let mut hook = BTreeMap::new();
+        hook.insert("url".to_string(), endpoint.to_string());
+
+        let mut config = BTreeMap::new();
+        config.insert("show".to_string(), vec![hook]);
+
+        let payload_map = payload_data.as_object().unwrap();
+        let payload = Payload { data: payload_map.to_owned() };
+        let emit = HttpEmitter::new(&payload, &config);
+
+        let emit_resp = EmitResponse {
+            success: vec![endpoint.to_string()],
+            failure: vec![],
+        };
+
+        assert_eq!(emit.update(), emit_resp);
     }
 
     #[test]
