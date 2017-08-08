@@ -7,7 +7,9 @@ pub enum StorageStatus {
 }
 
 pub trait Storage<T> {
-    fn new(config: Option<&DBConfig>) -> StoreResult<Self> where Self: Sized;
+    fn new(config: Option<&DBConfig>) -> StoreResult<Self>
+    where
+        Self: Sized;
     fn get(&self, id: &str, item_type: &str) -> Option<StoreResult<T>>;
     fn put(&self, item: &T) -> StoreResult<StorageStatus>;
     fn updated_at(&self) -> Option<i64>;

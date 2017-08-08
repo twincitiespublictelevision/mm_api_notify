@@ -2,8 +2,9 @@ use config::Config;
 use types::{StorageEngine, ThreadedAPI};
 
 pub struct Runtime<T, S>
-    where T: StorageEngine,
-          S: ThreadedAPI
+where
+    T: StorageEngine,
+    S: ThreadedAPI,
 {
     pub api: S,
     pub config: Config,

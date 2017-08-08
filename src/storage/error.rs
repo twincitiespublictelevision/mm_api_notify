@@ -23,8 +23,10 @@ impl fmt::Display for StoreError {
                 write!(f, "Failed to initialize the storage mechanism")
             }
             StoreError::AuthorizationError => {
-                write!(f,
-                       "Failed to initialize the authorization against the storage mechanism")
+                write!(
+                    f,
+                    "Failed to initialize the authorization against the storage mechanism"
+                )
             }
             StoreError::InvalidItemError(ref err) => err.fmt(f),
             StoreError::StorageFindError => write!(f, "Failed to return a document"),

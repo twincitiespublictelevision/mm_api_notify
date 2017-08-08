@@ -24,10 +24,11 @@ impl Storage<Object> for SinkStore {
     }
 
     fn put(&self, _: &Object) -> StoreResult<StorageStatus> {
-        self.resp
-            .clone()
-            .ok_or(StoreError::StorageWriteError)
-            .and(Ok(StorageStatus::Available))
+        self.resp.clone().ok_or(StoreError::StorageWriteError).and(
+            Ok(
+                StorageStatus::Available,
+            ),
+        )
     }
 
     fn updated_at(&self) -> Option<i64> {

@@ -33,8 +33,12 @@ impl Payload {
 
             let parent = match object.parent(store) {
                 Some(p) => {
-                    Payload::from_object(&p, store)
-                        .map_or(Json::Null, |payload| Json::Object(payload.data))
+                    Payload::from_object(&p, store).map_or(
+                        Json::Null,
+                        |payload| {
+                            Json::Object(payload.data)
+                        },
+                    )
                 }
                 None => Json::Null,
             };
@@ -53,7 +57,8 @@ impl Payload {
     }
 
     pub fn emitter<'a, 'b, T: Emitter<'a, 'b>, F>(&'a self, config: &'b HookConfig, con: F) -> T
-        where F: FnOnce(&'a Payload, &'b HookConfig) -> T
+    where
+        F: FnOnce(&'a Payload, &'b HookConfig) -> T,
     {
         con(self, config)
     }
@@ -79,11 +84,15 @@ mod tests {
         map.insert("id".to_string(), Json::String(id.to_string()));
         map.insert("type".to_string(), Json::String(ref_type.to_string()));
 
-        assert_eq!(Payload::new(map),
-                   Payload::from_ref(&Ref::new(id.to_string(),
-                                               Json::Object(Map::new()),
-                                               ref_type.to_string(),
-                                               "http://0.0.0.0".to_string())))
+        assert_eq!(
+            Payload::new(map),
+            Payload::from_ref(&Ref::new(
+                id.to_string(),
+                Json::Object(Map::new()),
+                ref_type.to_string(),
+                "http://0.0.0.0".to_string(),
+            ))
+        )
     }
 
     #[test]
@@ -93,27 +102,32 @@ mod tests {
         let obj_link = "http://0.0.0.0/obj-test-id/".to_string();
         let store = SinkStore::new(None).unwrap();
 
-        let json_types = vec![Json::Null,
-                              Json::Bool(true),
-                              Json::String("attr".to_string()),
-                              Json::Array(vec![])]
-                .into_iter();
+        let json_types = vec![
+            Json::Null,
+            Json::Bool(true),
+            Json::String("attr".to_string()),
+            Json::Array(vec![]),
+        ].into_iter();
 
         for json_type in json_types {
-            let obj = Object::new(obj_id.clone(),
-                                  json_type,
-                                  obj_type.clone(),
-                                  obj_link.clone());
+            let obj = Object::new(
+                obj_id.clone(),
+                json_type,
+                obj_type.clone(),
+                obj_link.clone(),
+            );
             assert_eq!(Payload::from_object(&obj, &store), None);
         }
     }
 
     #[test]
     fn valid_object() {
-        let obj = Object::new("obj-test-id".to_string(),
-                              Json::Object(Map::new()),
-                              "asset".to_string(),
-                              "http://0.0.0.0/obj-test-id/".to_string());
+        let obj = Object::new(
+            "obj-test-id".to_string(),
+            Json::Object(Map::new()),
+            "asset".to_string(),
+            "http://0.0.0.0/obj-test-id/".to_string(),
+        );
         let store = SinkStore::new(None).unwrap();
 
         let mut data = Map::new();
@@ -121,8 +135,10 @@ mod tests {
         data.insert("type".to_string(), Json::String("asset".to_string()));
         data.insert("parent".to_string(), Json::Null);
 
-        assert_eq!(Payload::from_object(&obj, &store).unwrap(),
-                   Payload::new(data));
+        assert_eq!(
+            Payload::from_object(&obj, &store).unwrap(),
+            Payload::new(data)
+        );
     }
 
     #[test]
@@ -181,7 +197,8 @@ mod tests {
                 "type": "franchise",
                 "parent": null
             }
-        }) {
+        })
+        {
 
             let payload = Payload { data: payload_map };
 
@@ -208,7 +225,8 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        }) {
+        })
+        {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 

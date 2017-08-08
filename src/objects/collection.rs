@@ -36,11 +36,12 @@ impl Collection {
         utils::parse_response(api.url(url)).and_then(|json| Collection::from_json(&json))
     }
 
-    fn import_page<T: StorageEngine, S: ThreadedAPI>(&self,
-                                                     runtime: &Runtime<T, S>,
-                                                     follow_refs: bool,
-                                                     since: i64)
-                                                     -> ImportResult {
+    fn import_page<T: StorageEngine, S: ThreadedAPI>(
+        &self,
+        runtime: &Runtime<T, S>,
+        follow_refs: bool,
+        since: i64,
+    ) -> ImportResult {
         self.page
             .par_iter()
             .map(|item| item.import(runtime, follow_refs, since))
@@ -49,40 +50,39 @@ impl Collection {
 }
 
 impl Importable for Collection {
-    fn import<T: StorageEngine, S: ThreadedAPI>(&self,
-                                                runtime: &Runtime<T, S>,
-                                                follow_refs: bool,
-                                                since: i64)
-                                                -> ImportResult {
+    fn import<T: StorageEngine, S: ThreadedAPI>(
+        &self,
+        runtime: &Runtime<T, S>,
+        follow_refs: bool,
+        since: i64,
+    ) -> ImportResult {
 
         let num_pages = (self.total as f64 / self.page_size as f64).ceil() as usize + 1;
 
         self.links
             .get("first")
             .and_then(|first_url| {
-                first_url
-                    .as_str()
-                    .and_then(|base_url| {
-                        Some((1..num_pages)
-                                 .collect::<Vec<usize>>()
-                                 .par_iter()
-                                 .map(|page_num| {
-                            let mut page_url = String::new();
-                            page_url.push_str(base_url);
-                            page_url.push(if base_url.contains('?') { '&' } else { '?' });
-                            page_url.push_str("page=");
-                            page_url.push_str(page_num.to_string().as_str());
+                first_url.as_str().and_then(|base_url| {
+                    Some(
+                        (1..num_pages)
+                            .collect::<Vec<usize>>()
+                            .par_iter()
+                            .map(|page_num| {
+                                let mut page_url = String::new();
+                                page_url.push_str(base_url);
+                                page_url.push(if base_url.contains('?') { '&' } else { '?' });
+                                page_url.push_str("page=");
+                                page_url.push_str(page_num.to_string().as_str());
 
-                            self.get_collection(&runtime.api, page_url.as_str())
-                                .and_then(|collection| {
-                                              Ok(collection.import_page(runtime,
-                                                                        follow_refs,
-                                                                        since))
-                                          })
-                                .unwrap_or((0, 1))
-                        })
-                                 .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2)))
-                    })
+                                self.get_collection(&runtime.api, page_url.as_str())
+                                    .and_then(|collection| {
+                                        Ok(collection.import_page(runtime, follow_refs, since))
+                                    })
+                                    .unwrap_or((0, 1))
+                            })
+                            .reduce(|| (0, 0), |(p1, f1), (p2, f2)| (p1 + p2, f1 + f2)),
+                    )
+                })
             })
             .or_else(|| Some(self.import_page(runtime, follow_refs, since)))
             .unwrap_or((0, 1))
@@ -90,53 +90,49 @@ impl Importable for Collection {
 
     fn from_json(json: &Json) -> IngestResult<Collection> {
 
-        let json_chunks =
-            json.as_object()
-                .and_then(|map| Some((map.get("data"), map.get("links"), map.get("meta"))));
+        let json_chunks = json.as_object().and_then(|map| {
+            Some((map.get("data"), map.get("links"), map.get("meta")))
+        });
 
         match json_chunks {
-                Some((Some(data), Some(links), Some(meta))) => {
-                    let pagination_data = meta.as_object()
-                        .and_then(|meta_map| {
-                            meta_map
-                                .get("pagination")
-                                .and_then(|pagination| {
-                                    pagination
-                                        .as_object()
-                                        .and_then(|pagination_map| {
-                                            Some((pagination_map
-                                                      .get("per_page")
-                                                      .and_then(|per_page| per_page.as_u64()),
-                                                  pagination_map.get("count").and_then(|total| {
-                                                total.as_u64()
-                                            })))
-                                        })
-                                })
-                        });
+            Some((Some(data), Some(links), Some(meta))) => {
+                let pagination_data = meta.as_object().and_then(|meta_map| {
+                    meta_map.get("pagination").and_then(|pagination| {
+                        pagination.as_object().and_then(|pagination_map| {
+                            Some((
+                                pagination_map.get("per_page").and_then(
+                                    |per_page| per_page.as_u64(),
+                                ),
+                                pagination_map.get("count").and_then(|total| total.as_u64()),
+                            ))
+                        })
+                    })
+                });
 
-                    data.as_array()
-                        .and_then(|data_list| {
-                                      Some(data_list
-                                               .iter()
-                                               .filter_map(|item| Ref::from_json(item).ok())
-                                               .collect::<Vec<Ref>>())
-                                  })
-                        .and_then(|items| match pagination_data {
-                                      Some((Some(per_page), Some(total))) => {
-                                          Some((items, per_page, total))
-                                      }
-                                      _ => None,
-                                  })
-                        .and_then(|(items, per_page, total)| {
-                                      Some(Collection::new(items,
-                                                           links.clone(),
-                                                           per_page as usize,
-                                                           total as usize))
-                                  })
-                }
-                _ => None,
+                data.as_array()
+                    .and_then(|data_list| {
+                        Some(
+                            data_list
+                                .iter()
+                                .filter_map(|item| Ref::from_json(item).ok())
+                                .collect::<Vec<Ref>>(),
+                        )
+                    })
+                    .and_then(|items| match pagination_data {
+                        Some((Some(per_page), Some(total))) => Some((items, per_page, total)),
+                        _ => None,
+                    })
+                    .and_then(|(items, per_page, total)| {
+                        Some(Collection::new(
+                            items,
+                            links.clone(),
+                            per_page as usize,
+                            total as usize,
+                        ))
+                    })
             }
-            .ok_or(IngestError::InvalidDocumentDataError)
+            _ => None,
+        }.ok_or(IngestError::InvalidDocumentDataError)
     }
 }
 

@@ -27,17 +27,19 @@ pub fn map_string_to_bson_dates(bson: Bson) -> Bson {
             }
         }
         Bson::Document(doc) => {
-            Bson::Document(doc.into_iter()
-                               .map(|(key, bson_val)| {
-                                        (key, map_string_to_bson_dates(bson_val))
-                                    })
-                               .collect::<bson::Document>())
+            Bson::Document(
+                doc.into_iter()
+                    .map(|(key, bson_val)| (key, map_string_to_bson_dates(bson_val)))
+                    .collect::<bson::Document>(),
+            )
         }
         Bson::Array(elements) => {
-            Bson::Array(elements
-                            .into_iter()
-                            .map(map_string_to_bson_dates)
-                            .collect::<Vec<Bson>>())
+            Bson::Array(
+                elements
+                    .into_iter()
+                    .map(map_string_to_bson_dates)
+                    .collect::<Vec<Bson>>(),
+            )
         }
         x => x,
     }
@@ -49,17 +51,19 @@ pub fn map_bson_dates_to_string(bson: Bson) -> Bson {
             Bson::String(datetime.format("%Y-%m-%dT%H:%M:%S%.fZ").to_string())
         }
         Bson::Document(doc) => {
-            Bson::Document(doc.into_iter()
-                               .map(|(key, bson_val)| {
-                                        (key, map_bson_dates_to_string(bson_val))
-                                    })
-                               .collect::<bson::Document>())
+            Bson::Document(
+                doc.into_iter()
+                    .map(|(key, bson_val)| (key, map_bson_dates_to_string(bson_val)))
+                    .collect::<bson::Document>(),
+            )
         }
         Bson::Array(elements) => {
-            Bson::Array(elements
-                            .into_iter()
-                            .map(map_bson_dates_to_string)
-                            .collect::<Vec<Bson>>())
+            Bson::Array(
+                elements
+                    .into_iter()
+                    .map(map_bson_dates_to_string)
+                    .collect::<Vec<Bson>>(),
+            )
         }
         x => x,
     }
@@ -83,7 +87,8 @@ mod tests {
         let test_datetime = test_date.parse::<DateTime<UTC>>();
         let test_bson_datetime = Bson::UtcDatetime(test_datetime.unwrap());
 
-        let doc1 = doc!{
+        let doc1 =
+            doc!{
             "datetime_string" => test_date
         };
 
@@ -92,17 +97,19 @@ mod tests {
             _ => panic!("Mapping Bson::Document resulted in non-Document Bson"),
         };
 
-        let doc2 = doc!{
+        let doc2 =
+            doc!{
             "datetime_string" => test_bson_datetime
         };
 
         assert_ne!(doc1.clone(), doc2.clone());
         assert_eq!(doc1_mapped.clone(), doc2.clone());
 
-        assert_eq!(Bson::Document(doc1.clone()),
-                   utils::map_bson_dates_to_string(
-                       utils::map_string_to_bson_dates(Bson::Document(doc1.clone()))
-                   )
+        assert_eq!(
+            Bson::Document(doc1.clone()),
+            utils::map_bson_dates_to_string(utils::map_string_to_bson_dates(
+                Bson::Document(doc1.clone()),
+            ))
         );
     }
 
@@ -110,8 +117,10 @@ mod tests {
     fn parses_json() {
         let mut map = Map::new();
         map.insert("id".to_string(), Json::String("test-id".to_string()));
-        map.insert("values".to_string(),
-                   Json::Array(vec![Json::Bool(true), Json::Null]));
+        map.insert(
+            "values".to_string(),
+            Json::Array(vec![Json::Bool(true), Json::Null]),
+        );
 
         let map_string = "{\"id\": \"test-id\", \"values\": [true, null]}";
 
