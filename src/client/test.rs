@@ -27,17 +27,22 @@ impl TestClient {
 impl APIClient for TestClient {
     fn new(_: Option<&APIConfig>) -> ClientResult<TestClient> {
         Ok(TestClient {
-               response: None,
-               reqs: Arc::new(Mutex::new(vec![])),
-           })
+            response: None,
+            reqs: Arc::new(Mutex::new(vec![])),
+        })
     }
 
     fn url(&self, url: &str) -> ClientResult<String> {
         let mut reqs = self.reqs.lock().unwrap();
         reqs.push(url.to_string());
-        self.response
-            .clone()
-            .ok_or(ClientError::API(MMCError::ResourceNotFound))
+        self.response.clone().ok_or(ClientError::API(
+            MMCError::ResourceNotFound,
+        ))
+    }
+
+    fn show(&self, id: &str) -> ClientResult<String> {
+        let url = "show/".to_string() + id;
+        self.url(url.as_str())
     }
 
     fn all_shows(&self) -> ClientResult<String> {

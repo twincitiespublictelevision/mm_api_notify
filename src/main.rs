@@ -41,7 +41,7 @@ use client::{APIClient, ClientResult, MMClient};
 use config::{DBConfig, APIConfig, parse_config};
 use error::{IngestError, IngestResult};
 use hooks::Payload;
-use objects::{Collection, Importable};
+use objects::{Object, Collection, Importable};
 use runtime::Runtime;
 use storage::{MongoStore, Storage};
 use types::{RunResult, StorageEngine, ThreadedAPI};
@@ -53,62 +53,87 @@ fn main() {
 
     let matches = App::new("Media Manager Notifier")
         .version(env!("CARGO_PKG_VERSION"))
-        .arg(Arg::with_name("config")
-            .short("c")
-            .long("config")
-            .takes_value(true)
-            .help("Path to configuration file"))
-        .arg(Arg::with_name("build")
-            .short("b")
-            .long("build")
-            .takes_value(false)
-            .help("Performs a full build run prior to entering the update loop"))
-        .arg(Arg::with_name("skip-update")
-            .short("k")
-            .long("skip-update")
-            .takes_value(false)
-            .help("Prevents update loop from running"))
-        .arg(Arg::with_name("start-time")
-            .long("start-time")
-            .short("t")
-            .takes_value(true)
-            .help("Defines the timestamp to start building or updating from"))
-        .arg(Arg::with_name("log-level")
-            .long("log-level")
-            .short("l")
-            .takes_value(true)
-            .help("Defines the log level to run at. Defaults to WARN"))
-        .arg(Arg::with_name("query")
-            .long("query")
-            .short("q")
-            .takes_value(true)
-            .number_of_values(2)
-            .value_names(&["type", "id"])
-            .conflicts_with_all(&["build", "skip-update", "start-time"])
-            .help("Queries the cache with a type and id pair and displays the payload that the \
-                   runner will emit"))
+        .arg(
+            Arg::with_name("config")
+                .short("c")
+                .long("config")
+                .takes_value(true)
+                .help("Path to configuration file"),
+        )
+        .arg(
+            Arg::with_name("build")
+                .short("b")
+                .long("build")
+                .takes_value(false)
+                .help(
+                    "Performs a full build run prior to entering the update loop",
+                ),
+        )
+        .arg(
+            Arg::with_name("show")
+                .short("s")
+                .long("show")
+                .takes_value(true)
+                .requires("build")
+                .help("Limits the full build to a single show"),
+        )
+        .arg(
+            Arg::with_name("skip-update")
+                .short("k")
+                .long("skip-update")
+                .takes_value(false)
+                .help("Prevents update loop from running"),
+        )
+        .arg(
+            Arg::with_name("start-time")
+                .long("start-time")
+                .short("t")
+                .takes_value(true)
+                .help("Defines the timestamp to start building or updating from"),
+        )
+        .arg(
+            Arg::with_name("log-level")
+                .long("log-level")
+                .short("l")
+                .takes_value(true)
+                .help("Defines the log level to run at. Defaults to WARN"),
+        )
+        .arg(
+            Arg::with_name("query")
+                .long("query")
+                .short("q")
+                .takes_value(true)
+                .number_of_values(2)
+                .value_names(&["type", "id"])
+                .conflicts_with_all(&["build", "skip-update", "start-time"])
+                .help(
+                    "Queries the cache with a type and id pair and displays the payload that the \
+                   runner will emit",
+                ),
+        )
         .get_matches();
 
-    let config_path =
-        if !matches.is_present("config") {
-                let info = AppInfo {
-                    name: env!("CARGO_PKG_NAME"),
-                    author: env!("CARGO_PKG_AUTHORS"),
-                };
+    let config_path = if !matches.is_present("config") {
+        let info = AppInfo {
+            name: env!("CARGO_PKG_NAME"),
+            author: env!("CARGO_PKG_AUTHORS"),
+        };
 
-                let path =
-                    get_app_dir(AppDataType::UserConfig, &info, "/")
-                        .and_then(|mut path| {
-                                      path.push("config.toml");
-                                      Ok(path)
-                                  })
-                        .expect("Failed to run. Unable to determine path default config location.");
+        let path = get_app_dir(AppDataType::UserConfig, &info, "/")
+            .and_then(|mut path| {
+                path.push("config.toml");
+                Ok(path)
+            })
+            .expect(
+                "Failed to run. Unable to determine path default config location.",
+            );
 
-                path.to_str().map(|str| str.to_string())
-            } else {
-                matches.value_of("config").map(|str| str.to_string())
-            }
-            .expect("Failed to run. Unable to parse path to default config location.");
+        path.to_str().map(|str| str.to_string())
+    } else {
+        matches.value_of("config").map(|str| str.to_string())
+    }.expect(
+        "Failed to run. Unable to parse path to default config location.",
+    );
 
     let conf_res = parse_config(config_path.as_str())
         .ok_or(IngestError::InvalidConfig)
@@ -130,25 +155,32 @@ fn main() {
 
                 fern::Dispatch::new()
                     .format(|out, message, record| {
-                                out.finish(format_args!("[{}][{}] {}",
-                                                UTC::now().format("%Y-%m-%d][%H:%M:%S"),
-                                                record.level(),
-                                                message))
-                            })
+                        out.finish(format_args!(
+                            "[{}][{}] {}",
+                            UTC::now().format("%Y-%m-%d][%H:%M:%S"),
+                            record.level(),
+                            message
+                        ))
+                    })
                     .level(log_level)
                     .chain(std::io::stdout())
-                    .chain(fern::log_file(log_location.as_str()).expect("Failed to open log file"))
+                    .chain(fern::log_file(log_location.as_str()).expect(
+                        "Failed to open log file",
+                    ))
                     .apply()
                     .expect("Failed to initialize logger");
             }
 
             // Initialize the thread pools
-            rayon::initialize(rayon::Configuration::new().num_threads(config.thread_pool_size))
-                .or_else(|err| {
-                    panic!("Failed to initalize the configured thread pool size. Unable to \
+            rayon::initialize(rayon::Configuration::new().num_threads(
+                config.thread_pool_size,
+            )).or_else(|err| {
+                panic!(
+                    "Failed to initalize the configured thread pool size. Unable to \
                               start. {}",
-                           err);
-                })
+                    err
+                );
+            })
                 .and_then(|_| {
                     let store = get_store(&config.db);
                     let api = get_api_client(&config.mm);
@@ -165,8 +197,10 @@ fn main() {
                             Some(Ok(obj)) => {
                                 match Payload::from_object(&obj, &runtime.store) {
                                     Some(payload) => {
-                                        println!("{}",
-                                                 serde_json::to_string_pretty(&payload).unwrap())
+                                        println!(
+                                            "{}",
+                                            serde_json::to_string_pretty(&payload).unwrap()
+                                        )
                                     }
                                     None => error!("Failed to generate payload from object."),
                                 }
@@ -174,15 +208,16 @@ fn main() {
                             _ => println!("Could not find the requested object in the cache."),
                         };
                     } else {
-                        let time_arg =
-                            matches
-                                .value_of("start-time")
-                                .map_or(0, |arg| {
-                                    arg.parse::<i64>().expect("Could not parse start time")
-                                });
+                        let time_arg = matches.value_of("start-time").map_or(0, |arg| {
+                            arg.parse::<i64>().expect("Could not parse start time")
+                        });
 
                         let build_res = if matches.is_present("build") {
-                            run_build(&runtime, time_arg).ok()
+                            if let Some(show) = matches.value_of("show") {
+                                run_show(&runtime, time_arg, show).ok()
+                            } else {
+                                run_build(&runtime, time_arg).ok()
+                            }
                         } else {
                             None
                         };
@@ -193,8 +228,10 @@ fn main() {
 
                             let update_start_time =
                                 if time_arg < (now - runtime.config.mm.changelog_max_timespan) {
-                                    compute_update_start_time(runtime.store.updated_at(),
-                                                          runtime.config.mm.changelog_max_timespan)
+                                    compute_update_start_time(
+                                        runtime.store.updated_at(),
+                                        runtime.config.mm.changelog_max_timespan,
+                                    )
                                 } else {
                                     time_arg + build_res.map_or(0, |(dur, _)| dur.num_seconds())
                                 };
@@ -218,15 +255,35 @@ fn get_api_client(config: &APIConfig) -> MMClient {
     MMClient::new(Some(config)).expect("Failed to initalize network client")
 }
 
-fn run_build<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
-                                               run_start_time: i64)
-                                               -> IngestResult<RunResult> {
+fn run_build<T: StorageEngine, S: ThreadedAPI>(
+    runtime: &Runtime<T, S>,
+    run_start_time: i64,
+) -> IngestResult<RunResult> {
 
-    info!("Starting build run from {} : {}",
-          run_start_time,
-          NaiveDateTime::from_timestamp(run_start_time, 0));
+    info!(
+        "Starting build run from {} : {}",
+        run_start_time,
+        NaiveDateTime::from_timestamp(run_start_time, 0)
+    );
 
-    let result = import_response(runtime.api.all_shows(), runtime, run_start_time);
+    let result = import_collection(runtime.api.all_shows(), runtime, run_start_time);
+    print_runtime("Create", &result);
+
+    result
+}
+
+fn run_show<T: StorageEngine, S: ThreadedAPI>(
+    runtime: &Runtime<T, S>,
+    run_start_time: i64,
+    id: &str,
+) -> IngestResult<RunResult> {
+    info!(
+        "Starting show build run from {} : {}",
+        run_start_time,
+        NaiveDateTime::from_timestamp(run_start_time, 0)
+    );
+
+    let result = import_object(runtime.api.show(id), runtime, run_start_time);
     print_runtime("Create", &result);
 
     result
@@ -237,25 +294,28 @@ fn compute_update_start_time(last_updated_at: Option<i64>, max_timespan: i64) ->
     let now = UTC::now().timestamp();
 
     if newest_db_timestamp < (now - max_timespan) {
-        warn!("Newest database record exceeds the maximum threshold for updates. Performing \
+        warn!(
+            "Newest database record exceeds the maximum threshold for updates. Performing \
                   update run with the maximum threshold. Consider performing a build (-b) run to \
-                  fully update the database.");
+                  fully update the database."
+        );
         now - max_timespan
     } else {
         newest_db_timestamp
     }
 }
 
-fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
-                                                     run_start_time: i64) {
+fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>, run_start_time: i64) {
     let mut import_start_time = run_start_time;
     let mut import_completion_time = UTC::now().timestamp();
     let mut next_run_time = run_start_time;
     let label = "Update";
 
-    info!("Starting update loop from {} : {}",
-          run_start_time,
-          NaiveDateTime::from_timestamp(run_start_time, 0));
+    info!(
+        "Starting update loop from {} : {}",
+        run_start_time,
+        NaiveDateTime::from_timestamp(run_start_time, 0)
+    );
 
     loop {
         if UTC::now().timestamp() > next_run_time {
@@ -264,9 +324,11 @@ fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
 
             import_start_time = import_start_time - runtime.config.lookback_timeframe;
 
-            info!("Starting update run from {} : {}",
-                  run_start_time,
-                  NaiveDateTime::from_timestamp(import_start_time, 0));
+            info!(
+                "Starting update run from {} : {}",
+                run_start_time,
+                NaiveDateTime::from_timestamp(import_start_time, 0)
+            );
 
             let run_time = run_update(runtime, import_start_time);
 
@@ -284,23 +346,27 @@ fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
     }
 }
 
-fn run_update<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>,
-                                                run_start_time: i64)
-                                                -> IngestResult<RunResult> {
+fn run_update<T: StorageEngine, S: ThreadedAPI>(
+    runtime: &Runtime<T, S>,
+    run_start_time: i64,
+) -> IngestResult<RunResult> {
 
     let date_string = NaiveDateTime::from_timestamp(run_start_time, 0)
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
 
-    import_response(runtime.api.changes(date_string.as_str()),
-                    runtime,
-                    run_start_time)
+    import_collection(
+        runtime.api.changes(date_string.as_str()),
+        runtime,
+        run_start_time,
+    )
 }
 
-fn import_response<T: StorageEngine, S: ThreadedAPI>(response: ClientResult<String>,
-                                                     runtime: &Runtime<T, S>,
-                                                     run_start_time: i64)
-                                                     -> IngestResult<RunResult> {
+fn import_collection<T: StorageEngine, S: ThreadedAPI>(
+    response: ClientResult<String>,
+    runtime: &Runtime<T, S>,
+    run_start_time: i64,
+) -> IngestResult<RunResult> {
     let start_time = UTC::now();
 
     let collection = match response {
@@ -316,9 +382,35 @@ fn import_response<T: StorageEngine, S: ThreadedAPI>(response: ClientResult<Stri
 
     collection
         .and_then(|coll| {
-                      let res = coll.import(runtime, true, run_start_time);
-                      Ok((UTC::now() - start_time, res))
-                  })
+            let res = coll.import(runtime, true, run_start_time);
+            Ok((UTC::now() - start_time, res))
+        })
+        .or(Ok((Duration::seconds(0), (0, 1))))
+}
+
+fn import_object<T: StorageEngine, S: ThreadedAPI>(
+    response: ClientResult<String>,
+    runtime: &Runtime<T, S>,
+    run_start_time: i64,
+) -> IngestResult<RunResult> {
+    let start_time = UTC::now();
+
+    let object = match response {
+        Ok(response_string) => {
+            let full_json: JsonResult<Json> = serde_json::from_str(response_string.as_str());
+            match full_json {
+                Ok(json) => Object::from_json(&json),
+                Err(err) => Err(IngestError::Parse(err)),
+            }
+        }
+        Err(err) => Err(IngestError::Client(err)),
+    };
+
+    object
+        .and_then(|obj| {
+            let res = obj.import(runtime, true, run_start_time);
+            Ok((UTC::now() - start_time, res))
+        })
         .or(Ok((Duration::seconds(0), (0, 1))))
 }
 
@@ -330,11 +422,13 @@ fn print_runtime(label: &str, run_time: &IngestResult<RunResult>) {
 }
 
 fn print_sucess(label: &str, &(dur, (pass, fail)): &RunResult) {
-    info!("{} run took {} seconds with {} successes and {} failures.",
-          label,
-          dur.num_seconds(),
-          pass,
-          fail)
+    info!(
+        "{} run took {} seconds with {} successes and {} failures.",
+        label,
+        dur.num_seconds(),
+        pass,
+        fail
+    )
 }
 
 fn print_failure(label: &str, error: &IngestError) {
