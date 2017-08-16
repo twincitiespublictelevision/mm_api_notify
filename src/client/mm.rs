@@ -26,8 +26,14 @@ impl APIClient for MMClient {
     }
 
     fn url(&self, url: &str) -> ClientResult<String> {
+        let mut lookup_url = String::new();
+        lookup_url.push_str(url);
+        lookup_url.push(if url.contains('?') { '&' } else { '?' });
+        lookup_url.push_str("platform-slug");
+        lookup_url.push_str("partnerplayer");
+
         self.client
-            .url(url)
+            .url(lookup_url.as_str())
             .or_else(|err| {
                 match err {
                     MMCError::ResourceNotFound => {}
@@ -44,7 +50,7 @@ impl APIClient for MMClient {
 
     fn show(&self, id: &str) -> ClientResult<String> {
         self.client
-            .show(id)
+            .show(id, Some(vec![("platform-slug", "partnerplayer")]))
             .or_else(|err| {
                 match err {
                     MMCError::ResourceNotFound => {}
@@ -61,7 +67,10 @@ impl APIClient for MMClient {
 
     fn all_shows(&self) -> ClientResult<String> {
         self.client
-            .shows(vec![("page-size", "50")])
+            .shows(vec![
+                ("page-size", "50"),
+                ("platform-slug", "partnerplayer"),
+            ])
             .or_else(|err| {
                 error!("Failed to query all shows due to {}", err);
                 Err(err)
@@ -71,7 +80,7 @@ impl APIClient for MMClient {
 
     fn changes(&self, since: &str) -> ClientResult<String> {
         self.client
-            .changelog(vec![("since", since)])
+            .changelog(vec![("since", since), ("platform-slug", "partnerplayer")])
             .or_else(|err| {
                 error!("Failed to query changelog from {} due to {}", since, err);
                 Err(err)
