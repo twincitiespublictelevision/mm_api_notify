@@ -80,7 +80,7 @@ impl APIClient for MMClient {
 
     fn changes(&self, since: &str) -> ClientResult<String> {
         self.client
-            .changelog(vec![("since", since), ("platform-slug", "partnerplayer")])
+            .changelog(vec![("since", since)])
             .or_else(|err| {
                 error!("Failed to query changelog from {} due to {}", since, err);
                 Err(err)
