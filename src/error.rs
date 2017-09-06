@@ -30,9 +30,11 @@ impl fmt::Display for IngestError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             IngestError::InvalidConfig => {
-                write!(f,
-                       "Supplied config.toml could not be understood. Try checking for a \
-                        misspelled or missing property.")
+                write!(
+                    f,
+                    "Supplied config.toml could not be understood. Try checking for a \
+                        misspelled or missing property."
+                )
             }
             IngestError::Client(ref err) => err.fmt(f),
             IngestError::Parse(ref err) => err.fmt(f),
