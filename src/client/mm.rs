@@ -30,6 +30,7 @@ impl APIClient for MMClient {
         lookup_url.push_str(url);
         lookup_url.push(if url.contains('?') { '&' } else { '?' });
         lookup_url.push_str("platform-slug");
+        lookup_url.push_str("=");
         lookup_url.push_str("partnerplayer");
 
         self.client
