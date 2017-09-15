@@ -119,7 +119,13 @@ impl Object {
     }
 
     fn child_collection<T: ThreadedAPI>(&self, api: &T, child_type: &str) -> Option<Collection> {
-        let url = format!("{}{}s/?page-size=50", self.self_url, child_type);
+        let url = format!(
+            "{}{}s/?page-size=50",
+            self.self_url.split('?').nth(0).unwrap_or(
+                self.self_url.as_str(),
+            ),
+            child_type
+        );
 
         utils::parse_response(api.url(url.as_str()))
             .and_then(|api_json| Collection::from_json(&api_json))
