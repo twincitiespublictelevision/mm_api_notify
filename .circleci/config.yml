@@ -17,6 +17,7 @@ jobs:
       - save_cache:
           key: build-{{ .Branch }}-{{ checksum ".circle-sha" }}
           paths:
+            - ~/project/.deploy
             - ~/project/target/release
 
   build_container:
