@@ -46,6 +46,9 @@ workflows:
       - build:
           requires:
             - test
+      - build_container:
+          requires:
+            - build
           filters:
             branches:
               only:
