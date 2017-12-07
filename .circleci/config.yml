@@ -13,7 +13,6 @@ jobs:
     steps:
       - checkout
       - run: cargo build --release
-      - run: cp target/release/mm_api_notify workspace/mm_api_notify
       - run: echo $CIRCLE_SHA1 > .circle-sha
       - save_cache:
           key: build-{{ .Branch }}-{{ checksum ".circle-sha" }}
