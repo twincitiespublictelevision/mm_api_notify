@@ -1,33 +1,55 @@
 version: 2
 jobs:
-  checkout:
-    docker:
-      - image: liuchong/rustup:stable
-    steps:
-      - checkout
   test:
     docker:
-      - image: liuchong/rustup:stable
+      - image: rust:latest
     steps:
       - checkout
       - run: cargo test
 
-  build:
+  build_app:
+    working_directory: /tmp
     docker:
-      - image: liuchong/rustup:stable
+      - image: rust:latest
     steps:
       - checkout
+      - run: mkdir workspace
       - run: cargo build --release
+      - run: cp target/release/mm_api_notify workspace/mm_api_notify
+      - persist_to_workspace:
+          root: workspace
+          paths:
+            - mm_api_notify
 
+  build_container:
+    - working_directory: /tmp
+    docker:
+      - image: docker:latest
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - setup_remote_docker
+      - run:
+          command: |
+            cp workspace/mm_api_notify .deploy/mm_api_notify
+            cd .deploy
+            docker build -t mm_api_notify .
+            docker tag mm_api_notify:latest
+            docker login -u $DOCKER_USER -p $DOCKER_PASS
+            docker push tptwebmaster/mm_api_notify:latest
+            
 workflows:
   version: 2
-  test_and_build:
+  build:
     jobs:
-      - checkout
-      - test:
+      - test
+      - build_app:
           requires:
-            - checkout
-      - build:
+            - test
+      - build_container:
           requires:
-            - checkout
-            
+            - build_app
+          filters:
+            branches:
+              only:
+                - master
