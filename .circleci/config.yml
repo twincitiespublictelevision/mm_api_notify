@@ -7,31 +7,31 @@ jobs:
       - checkout
       - run: cargo test
 
-  build_app:
-    working_directory: /tmp
+  build:
     docker:
       - image: rust:latest
     steps:
       - checkout
-      - run: mkdir workspace
       - run: cargo build --release
       - run: cp target/release/mm_api_notify workspace/mm_api_notify
-      - persist_to_workspace:
-          root: workspace
+      - run: echo $CIRCLE_SHA1 > .circle-sha
+      - save_cache:
+          key: build-{{ .Branch }}-{{ checksum ".circle-sha" }}
           paths:
-            - mm_api_notify
+            - ~/project/target/release
 
   build_container:
     working_directory: /tmp
     docker:
       - image: docker:latest
     steps:
-      - attach_workspace:
-          at: /tmp/workspace
+      - run: echo $CIRCLE_SHA1 > .circle-sha
+      - restore_cache:
+          key: build-{{ .Branch }}-{{ checksum ".circle-sha" }}
       - setup_remote_docker
       - run:
           command: |
-            cp workspace/mm_api_notify .deploy/mm_api_notify
+            cp target/release/mm_api_notify .deploy/mm_api_notify
             cd .deploy
             docker build -t mm_api_notify .
             docker tag mm_api_notify:latest
@@ -43,12 +43,9 @@ workflows:
   build:
     jobs:
       - test
-      - build_app:
+      - build:
           requires:
             - test
-      - build_container:
-          requires:
-            - build_app
           filters:
             branches:
               only:
