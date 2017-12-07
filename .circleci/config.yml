@@ -20,6 +20,8 @@ jobs:
             - ~/project/target/release
 
   build_container:
+    docker:
+      - image: docker:latest
     steps:
       - run: echo $CIRCLE_SHA1 > .circle-sha
       - restore_cache:
