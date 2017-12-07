@@ -22,7 +22,7 @@ jobs:
             - mm_api_notify
 
   build_container:
-    - working_directory: /tmp
+    working_directory: /tmp
     docker:
       - image: docker:latest
     steps:
@@ -37,7 +37,7 @@ jobs:
             docker tag mm_api_notify:latest
             docker login -u $DOCKER_USER -p $DOCKER_PASS
             docker push tptwebmaster/mm_api_notify:latest
-            
+
 workflows:
   version: 2
   build:
