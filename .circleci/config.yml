@@ -33,7 +33,7 @@ jobs:
             cp target/release/mm_api_notify .deploy/mm_api_notify
             cd .deploy
             docker build -t mm_api_notify .
-            docker tag mm_api_notify:latest
+            docker tag mm_api_notify:latest tptwebmaster/mm_api_notify:latest
             docker login -u $DOCKER_USER -p $DOCKER_PASS
             docker push tptwebmaster/mm_api_notify:latest
 
