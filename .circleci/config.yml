@@ -2,14 +2,14 @@ version: 2
 jobs:
   test:
     docker:
-      - image: rust:latest
+      - image: tptwebmaster/rust-centos:latest
     steps:
       - checkout
       - run: cargo test
 
   build:
     docker:
-      - image: rust:latest
+      - image: tptwebmaster/rust-centos:latest
     steps:
       - checkout
       - run: cargo build --release
