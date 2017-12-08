@@ -3,7 +3,7 @@ extern crate mongodb;
 
 use bson::Bson;
 use mongodb::{Client, ThreadedClient};
-use mongodb::coll::options::{FindOptions, FindOneAndUpdateOptions};
+use mongodb::coll::options::{FindOptions, UpdateOptions};
 use mongodb::common::WriteConcern;
 use mongodb::db::{Database, ThreadedDatabase};
 
@@ -65,7 +65,7 @@ impl Storage<Object> for MongoStore {
                 "_id" => id
             };
 
-                let mut options = FindOneAndUpdateOptions::new();
+                let mut options = UpdateOptions::new();
                 options.upsert = Some(true);
                 options.write_concern = Some(WriteConcern {
                     w: 1,
@@ -74,16 +74,19 @@ impl Storage<Object> for MongoStore {
                     fsync: true,
                 });
 
-                coll.find_one_and_replace(filter, doc, Some(options))
+                coll.replace_one(filter, doc, Some(options))
                     .map_err(|e| {
                         print!("{:?}", e);
                         StoreError::StorageWriteError
                     })
-                    .and_then(|opt| {
-                        Ok(match opt {
-                            Some(_) => StorageStatus::Available,
-                            None => StorageStatus::NotAvailable,
-                        })
+                    .and_then(|res| if res.write_exception.is_none() {
+                        if res.matched_count > 0 {
+                            Ok(StorageStatus::Available)
+                        } else {
+                            Ok(StorageStatus::NotAvailable)
+                        }
+                    } else {
+                        Err(StoreError::StorageWriteError)
                     })
             })
     }
