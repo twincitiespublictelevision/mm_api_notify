@@ -1,5 +1,5 @@
-extern crate toml;
 extern crate log;
+extern crate toml;
 
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -46,7 +46,6 @@ pub struct APIConfig {
 pub type HookConfig = BTreeMap<String, Vec<BTreeMap<String, String>>>;
 
 pub fn parse_config(path: &str) -> Option<Config> {
-
     let mut config_toml = String::new();
 
     let mut file = match File::open(path) {
@@ -54,7 +53,7 @@ pub fn parse_config(path: &str) -> Option<Config> {
         Err(_) => {
             error!(
                 "Could not find config file at {}. See the included README and \
-                    config.toml.example for configuration instructions.",
+                 config.toml.example for configuration instructions.",
                 path
             );
             return None;

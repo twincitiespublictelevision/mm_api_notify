@@ -11,7 +11,7 @@ extern crate fern;
 #[macro_use]
 extern crate log;
 extern crate mm_client;
-extern crate mongodb;
+extern crate mongo_driver;
 extern crate rayon;
 extern crate serde;
 #[macro_use]
@@ -28,9 +28,10 @@ mod runtime;
 mod storage;
 mod types;
 
-use app_dirs::{AppDataType, AppInfo, get_app_dir};
-use clap::{Arg, App};
-use chrono::{Duration, NaiveDateTime, UTC};
+use app_dirs::{get_app_dir, AppDataType, AppInfo};
+use clap::{App, Arg};
+use chrono::{Duration, NaiveDateTime};
+use chrono::offset::Utc;
 use serde_json::error::Result as JsonResult;
 use serde_json::Value as Json;
 
@@ -38,10 +39,10 @@ use std::str::FromStr;
 use std::{thread, time};
 
 use client::{APIClient, ClientResult, MMClient};
-use config::{DBConfig, APIConfig, parse_config};
+use config::{parse_config, APIConfig, DBConfig};
 use error::{IngestError, IngestResult};
 use hooks::Payload;
-use objects::{Object, Collection, Importable};
+use objects::{Collection, Importable, Object};
 use runtime::Runtime;
 use storage::{MongoStore, Storage};
 use types::{RunResult, StorageEngine, ThreadedAPI};
@@ -50,7 +51,6 @@ use types::{RunResult, StorageEngine, ThreadedAPI};
 /// Starts processing
 ///
 fn main() {
-
     let matches = App::new("Media Manager Notifier")
         .version(env!("CARGO_PKG_VERSION"))
         .arg(
@@ -65,9 +65,7 @@ fn main() {
                 .short("b")
                 .long("build")
                 .takes_value(false)
-                .help(
-                    "Performs a full build run prior to entering the update loop",
-                ),
+                .help("Performs a full build run prior to entering the update loop"),
         )
         .arg(
             Arg::with_name("show")
@@ -108,7 +106,7 @@ fn main() {
                 .conflicts_with_all(&["build", "skip-update", "start-time"])
                 .help(
                     "Queries the cache with a type and id pair and displays the payload that the \
-                   runner will emit",
+                     runner will emit",
                 ),
         )
         .get_matches();
@@ -124,24 +122,18 @@ fn main() {
                 path.push("config.toml");
                 Ok(path)
             })
-            .expect(
-                "Failed to run. Unable to determine path default config location.",
-            );
+            .expect("Failed to run. Unable to determine path default config location.");
 
         path.to_str().map(|str| str.to_string())
     } else {
         matches.value_of("config").map(|str| str.to_string())
-    }.expect(
-        "Failed to run. Unable to parse path to default config location.",
-    );
+    }.expect("Failed to run. Unable to parse path to default config location.");
 
     let conf_res = parse_config(config_path.as_str())
         .ok_or(IngestError::InvalidConfig)
         .and_then(|config| {
-
             // Initialize logging
             if let &Some(ref log_location) = &config.log.location {
-
                 let config_log_level_filter = match config.log.level {
                     Some(ref level) => log::LogLevelFilter::from_str(level.as_str()).ok(),
                     None => None,
@@ -157,30 +149,27 @@ fn main() {
                     .format(|out, message, record| {
                         out.finish(format_args!(
                             "[{}][{}] {}",
-                            UTC::now().format("%Y-%m-%d][%H:%M:%S"),
+                            Utc::now().format("%Y-%m-%d][%H:%M:%S"),
                             record.level(),
                             message
                         ))
                     })
                     .level(log_level)
                     .chain(std::io::stdout())
-                    .chain(fern::log_file(log_location.as_str()).expect(
-                        "Failed to open log file",
-                    ))
+                    .chain(fern::log_file(log_location.as_str()).expect("Failed to open log file"))
                     .apply()
                     .expect("Failed to initialize logger");
             }
 
             // Initialize the thread pools
-            rayon::initialize(rayon::Configuration::new().num_threads(
-                config.thread_pool_size,
-            )).or_else(|err| {
-                panic!(
-                    "Failed to initalize the configured thread pool size. Unable to \
-                              start. {}",
-                    err
-                );
-            })
+            rayon::initialize(rayon::Configuration::new().num_threads(config.thread_pool_size))
+                .or_else(|err| {
+                    panic!(
+                        "Failed to initalize the configured thread pool size. Unable to \
+                         start. {}",
+                        err
+                    );
+                })
                 .and_then(|_| {
                     let store = get_store(&config.db);
                     let api = get_api_client(&config.mm);
@@ -194,17 +183,12 @@ fn main() {
                     if let Some(query) = matches.values_of("query") {
                         let query_args = query.collect::<Vec<&str>>();
                         match runtime.store.get(query_args[1], query_args[0]) {
-                            Some(Ok(obj)) => {
-                                match Payload::from_object(&obj, &runtime.store) {
-                                    Some(payload) => {
-                                        println!(
-                                            "{}",
-                                            serde_json::to_string_pretty(&payload).unwrap()
-                                        )
-                                    }
-                                    None => error!("Failed to generate payload from object."),
+                            Some(Ok(obj)) => match Payload::from_object(&obj, &runtime.store) {
+                                Some(payload) => {
+                                    println!("{}", serde_json::to_string_pretty(&payload).unwrap())
                                 }
-                            }
+                                None => error!("Failed to generate payload from object."),
+                            },
                             _ => println!("Could not find the requested object in the cache."),
                         };
                     } else {
@@ -223,8 +207,7 @@ fn main() {
                         };
 
                         if !matches.is_present("skip-update") {
-
-                            let now = UTC::now().timestamp();
+                            let now = Utc::now().timestamp();
 
                             let update_start_time =
                                 if time_arg < (now - runtime.config.mm.changelog_max_timespan) {
@@ -248,7 +231,7 @@ fn main() {
 }
 
 fn get_store(config: &DBConfig) -> MongoStore {
-    MongoStore::new(Some(config)).expect("Failed to connect to storage")
+    MongoStore::new(config).expect("Failed to connect to storage")
 }
 
 fn get_api_client(config: &APIConfig) -> MMClient {
@@ -259,7 +242,6 @@ fn run_build<T: StorageEngine, S: ThreadedAPI>(
     runtime: &Runtime<T, S>,
     run_start_time: i64,
 ) -> IngestResult<RunResult> {
-
     info!(
         "Starting build run from {} : {}",
         run_start_time,
@@ -291,13 +273,13 @@ fn run_show<T: StorageEngine, S: ThreadedAPI>(
 
 fn compute_update_start_time(last_updated_at: Option<i64>, max_timespan: i64) -> i64 {
     let newest_db_timestamp = last_updated_at.unwrap_or(0);
-    let now = UTC::now().timestamp();
+    let now = Utc::now().timestamp();
 
     if newest_db_timestamp < (now - max_timespan) {
         warn!(
             "Newest database record exceeds the maximum threshold for updates. Performing \
-                  update run with the maximum threshold. Consider performing a build (-b) run to \
-                  fully update the database."
+             update run with the maximum threshold. Consider performing a build (-b) run to \
+             fully update the database."
         );
         now - max_timespan
     } else {
@@ -307,7 +289,7 @@ fn compute_update_start_time(last_updated_at: Option<i64>, max_timespan: i64) ->
 
 fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>, run_start_time: i64) {
     let mut import_start_time = run_start_time;
-    let mut import_completion_time = UTC::now().timestamp();
+    let mut import_completion_time = Utc::now().timestamp();
     let mut next_run_time = run_start_time;
     let label = "Update";
 
@@ -318,9 +300,8 @@ fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>, ru
     );
 
     loop {
-        if UTC::now().timestamp() > next_run_time {
-
-            next_run_time = UTC::now().timestamp() + runtime.config.min_runtime_delta;
+        if Utc::now().timestamp() > next_run_time {
+            next_run_time = Utc::now().timestamp() + runtime.config.min_runtime_delta;
 
             import_start_time = import_start_time - runtime.config.lookback_timeframe;
 
@@ -335,7 +316,7 @@ fn run_update_loop<T: StorageEngine, S: ThreadedAPI>(runtime: &Runtime<T, S>, ru
             print_runtime(label, &run_time);
 
             import_start_time = import_completion_time;
-            import_completion_time = UTC::now().timestamp();
+            import_completion_time = Utc::now().timestamp();
 
             let diff = next_run_time - import_completion_time;
 
@@ -350,7 +331,6 @@ fn run_update<T: StorageEngine, S: ThreadedAPI>(
     runtime: &Runtime<T, S>,
     run_start_time: i64,
 ) -> IngestResult<RunResult> {
-
     let date_string = NaiveDateTime::from_timestamp(run_start_time, 0)
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
@@ -367,7 +347,7 @@ fn import_collection<T: StorageEngine, S: ThreadedAPI>(
     runtime: &Runtime<T, S>,
     run_start_time: i64,
 ) -> IngestResult<RunResult> {
-    let start_time = UTC::now();
+    let start_time = Utc::now();
 
     let collection = match response {
         Ok(response_string) => {
@@ -383,7 +363,7 @@ fn import_collection<T: StorageEngine, S: ThreadedAPI>(
     collection
         .and_then(|coll| {
             let res = coll.import(runtime, true, run_start_time);
-            Ok((UTC::now() - start_time, res))
+            Ok((Utc::now().signed_duration_since(start_time), res))
         })
         .or(Ok((Duration::seconds(0), (0, 1))))
 }
@@ -393,7 +373,7 @@ fn import_object<T: StorageEngine, S: ThreadedAPI>(
     runtime: &Runtime<T, S>,
     run_start_time: i64,
 ) -> IngestResult<RunResult> {
-    let start_time = UTC::now();
+    let start_time = Utc::now();
 
     let object = match response {
         Ok(response_string) => {
@@ -409,7 +389,7 @@ fn import_object<T: StorageEngine, S: ThreadedAPI>(
     object
         .and_then(|obj| {
             let res = obj.import(runtime, true, run_start_time);
-            Ok((UTC::now() - start_time, res))
+            Ok((Utc::now().signed_duration_since(start_time), res))
         })
         .or(Ok((Duration::seconds(0), (0, 1))))
 }

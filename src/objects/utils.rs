@@ -4,7 +4,8 @@ extern crate mm_client;
 extern crate serde_json;
 
 use self::bson::Bson;
-use self::chrono::{DateTime, UTC};
+use self::chrono::DateTime;
+use self::chrono::offset::Utc;
 use self::serde_json::Value as Json;
 
 use client::ClientResult;
@@ -20,27 +21,21 @@ pub fn parse_response(response: ClientResult<String>) -> IngestResult<Json> {
 
 pub fn map_string_to_bson_dates(bson: Bson) -> Bson {
     match bson {
-        Bson::String(string) => {
-            match string.parse::<DateTime<UTC>>() {
-                Ok(datetime) => Bson::UtcDatetime(datetime),
-                _ => Bson::String(string),
-            }
-        }
-        Bson::Document(doc) => {
-            Bson::Document(
-                doc.into_iter()
-                    .map(|(key, bson_val)| (key, map_string_to_bson_dates(bson_val)))
-                    .collect::<bson::Document>(),
-            )
-        }
-        Bson::Array(elements) => {
-            Bson::Array(
-                elements
-                    .into_iter()
-                    .map(map_string_to_bson_dates)
-                    .collect::<Vec<Bson>>(),
-            )
-        }
+        Bson::String(string) => match string.parse::<DateTime<Utc>>() {
+            Ok(datetime) => Bson::UtcDatetime(datetime),
+            _ => Bson::String(string),
+        },
+        Bson::Document(doc) => Bson::Document(
+            doc.into_iter()
+                .map(|(key, bson_val)| (key, map_string_to_bson_dates(bson_val)))
+                .collect::<bson::Document>(),
+        ),
+        Bson::Array(elements) => Bson::Array(
+            elements
+                .into_iter()
+                .map(map_string_to_bson_dates)
+                .collect::<Vec<Bson>>(),
+        ),
         x => x,
     }
 }
@@ -50,21 +45,17 @@ pub fn map_bson_dates_to_string(bson: Bson) -> Bson {
         Bson::UtcDatetime(datetime) => {
             Bson::String(datetime.format("%Y-%m-%dT%H:%M:%S%.fZ").to_string())
         }
-        Bson::Document(doc) => {
-            Bson::Document(
-                doc.into_iter()
-                    .map(|(key, bson_val)| (key, map_bson_dates_to_string(bson_val)))
-                    .collect::<bson::Document>(),
-            )
-        }
-        Bson::Array(elements) => {
-            Bson::Array(
-                elements
-                    .into_iter()
-                    .map(map_bson_dates_to_string)
-                    .collect::<Vec<Bson>>(),
-            )
-        }
+        Bson::Document(doc) => Bson::Document(
+            doc.into_iter()
+                .map(|(key, bson_val)| (key, map_bson_dates_to_string(bson_val)))
+                .collect::<bson::Document>(),
+        ),
+        Bson::Array(elements) => Bson::Array(
+            elements
+                .into_iter()
+                .map(map_bson_dates_to_string)
+                .collect::<Vec<Bson>>(),
+        ),
         x => x,
     }
 }
@@ -72,7 +63,7 @@ pub fn map_bson_dates_to_string(bson: Bson) -> Bson {
 #[cfg(test)]
 mod tests {
     use bson::Bson;
-    use chrono::{DateTime, UTC};
+    use chrono::{DateTime, Utc};
     use mm_client::MMCError;
     use serde_json::Map;
     use serde_json::Value as Json;
@@ -84,11 +75,10 @@ mod tests {
     #[test]
     fn utc_datetime_replacement() {
         let test_date = "2017-01-19T14:58:55.121584Z";
-        let test_datetime = test_date.parse::<DateTime<UTC>>();
+        let test_datetime = test_date.parse::<DateTime<Utc>>();
         let test_bson_datetime = Bson::UtcDatetime(test_datetime.unwrap());
 
-        let doc1 =
-            doc!{
+        let doc1 = doc!{
             "datetime_string" => test_date
         };
 
@@ -97,8 +87,7 @@ mod tests {
             _ => panic!("Mapping Bson::Document resulted in non-Document Bson"),
         };
 
-        let doc2 =
-            doc!{
+        let doc2 = doc!{
             "datetime_string" => test_bson_datetime
         };
 
@@ -107,9 +96,9 @@ mod tests {
 
         assert_eq!(
             Bson::Document(doc1.clone()),
-            utils::map_bson_dates_to_string(utils::map_string_to_bson_dates(
-                Bson::Document(doc1.clone()),
-            ))
+            utils::map_bson_dates_to_string(utils::map_string_to_bson_dates(Bson::Document(
+                doc1.clone()
+            ),))
         );
     }
 

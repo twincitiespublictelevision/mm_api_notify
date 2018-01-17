@@ -56,7 +56,6 @@ impl Importable for Collection {
         follow_refs: bool,
         since: i64,
     ) -> ImportResult {
-
         let num_pages = (self.total as f64 / self.page_size as f64).ceil() as usize + 1;
 
         self.links
@@ -89,10 +88,8 @@ impl Importable for Collection {
     }
 
     fn from_json(json: &Json) -> IngestResult<Collection> {
-
-        let json_chunks = json.as_object().and_then(|map| {
-            Some((map.get("data"), map.get("links"), map.get("meta")))
-        });
+        let json_chunks = json.as_object()
+            .and_then(|map| Some((map.get("data"), map.get("links"), map.get("meta"))));
 
         match json_chunks {
             Some((Some(data), Some(links), Some(meta))) => {
@@ -100,9 +97,9 @@ impl Importable for Collection {
                     meta_map.get("pagination").and_then(|pagination| {
                         pagination.as_object().and_then(|pagination_map| {
                             Some((
-                                pagination_map.get("per_page").and_then(
-                                    |per_page| per_page.as_u64(),
-                                ),
+                                pagination_map
+                                    .get("per_page")
+                                    .and_then(|per_page| per_page.as_u64()),
                                 pagination_map.get("count").and_then(|total| total.as_u64()),
                             ))
                         })
@@ -152,7 +149,7 @@ mod tests {
     use config::{APIConfig, Config, DBConfig, LogConfig};
     use objects::{Collection, Importable, Ref};
     use runtime::Runtime;
-    use storage::{SinkStore, Storage};
+    use storage::SinkStore;
     use client::{APIClient, TestClient};
 
     #[test]
@@ -251,7 +248,7 @@ mod tests {
             "http://0.0.0.0/test?page=2".to_string(),
             "http://0.0.0.0/test?page=3".to_string(),
             "http://0.0.0.0/test?page=4".to_string(),
-            "http://0.0.0.0/test?page=5".to_string()
+            "http://0.0.0.0/test?page=5".to_string(),
         ];
 
         let endpoints_set: HashSet<String> = HashSet::from_iter(endpoints);

@@ -17,8 +17,11 @@
 3. Use the `mm_api_import.example` sample or other scripts to create a service
 4. Move application build to the location specified in service script
 5. Create a config file based on `config.toml.example` file (see below)
-6. Initially run with the `--rebuild` flag to build the cache for the first
-time.
+6. Start the service with `rebuild` to build the cache for the first time.
+
+## Docker Image
+
+Alternatively a [CentOS](https://www.centos.org/) based [Docker](https://www.docker.com/) image is [available for use](https://hub.docker.com/r/tptwebmaster/mm_api_notify/).
 
 ## Configuration
 
@@ -35,7 +38,7 @@ A sample config file is supplied in `config.toml.example`
 
 ### Database [db]
 
-These are the values required to connect to the MongoDB instance
+These are the values required to connect to the MongoDB instance. Authentication currently is run against the `admin` database.
 
 | Option   |
 | -------- |
@@ -58,6 +61,7 @@ These are the values required to connect to the MongoDB instance
 | Option   | Value            |
 | -------- | ---------------- |
 | location | Path to log file |
+| level    | Level to report  |
 
 ### Hooks [hooks]
 
@@ -83,7 +87,9 @@ mm_api_notify watches for changes to resources via the `changelog` endpoint of [
 
 **DELETE** - Deletes are emitted when an element is listed as a deletion in the `changelog` or when the keys defined for the service are no longer able to access a resource (404 or 403).
 
-The binary also offers a query mode to generate emit payloads that are useful for debugging
+## Query Mode
+
+The binary also offers a query mode to generate emit payloads that are useful for debugging what is being sent during and update POST request.
 
 ```
 mm_api_notify --query asset 0146e77a-b7c2-4492-b791-47586bb2a154

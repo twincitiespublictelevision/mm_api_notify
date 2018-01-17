@@ -32,14 +32,8 @@ impl Payload {
             data.insert("type".to_string(), Json::String(object.object_type.clone()));
 
             let parent = match object.parent(store) {
-                Some(p) => {
-                    Payload::from_object(&p, store).map_or(
-                        Json::Null,
-                        |payload| {
-                            Json::Object(payload.data)
-                        },
-                    )
-                }
+                Some(p) => Payload::from_object(&p, store)
+                    .map_or(Json::Null, |payload| Json::Object(payload.data)),
                 None => Json::Null,
             };
             data.insert("parent".to_string(), parent);
@@ -73,7 +67,7 @@ mod tests {
 
     use hooks::{Emitter, HttpEmitter, Payload};
     use objects::{Importable, Object, Ref};
-    use storage::{SinkStore, Storage};
+    use storage::SinkStore;
 
     #[test]
     fn payload_from_ref() {
@@ -186,8 +180,7 @@ mod tests {
 
         let obj = Object::from_json(&obj_json).unwrap();
 
-        if let Json::Object(payload_map) =
-            json!({
+        if let Json::Object(payload_map) = json!({
             "updated_at": "2017-01-01T00:00:00Z",
             "id": "test-child",
             "type": "show",
@@ -197,9 +190,7 @@ mod tests {
                 "type": "franchise",
                 "parent": null
             }
-        })
-        {
-
+        }) {
             let payload = Payload { data: payload_map };
 
             let test_payload = Payload::from_object(&obj, &store).unwrap();
@@ -214,8 +205,7 @@ mod tests {
     fn provides_emitter_of_self() {
         let config = BTreeMap::new();
 
-        if let Json::Object(payload_map) =
-            json!({
+        if let Json::Object(payload_map) = json!({
             "id": "test-child",
             "type": "show",
             "updated_at": "2017-01-01T00:00:00Z",
@@ -225,8 +215,7 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        })
-        {
+        }) {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
