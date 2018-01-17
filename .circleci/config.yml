@@ -42,12 +42,11 @@ workflows:
   build:
     jobs:
       - test
-      - build:
-          requires:
-            - test
+      - build
       - build_container:
           requires:
             - build
+            - test
           filters:
             branches:
               only:
