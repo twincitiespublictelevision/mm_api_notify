@@ -2,12 +2,12 @@ extern crate reqwest;
 extern crate serde_json;
 
 use serde_json::Value as Json;
-use self::reqwest::header::{Authorization, Basic};
+use self::reqwest::header::{Authorization, Basic, UserAgent};
 use self::reqwest::{Method, StatusCode};
 
 use std::collections::BTreeMap;
 
-use hooks::{Emitter, EmitAction, EmitResponse, Payload};
+use hooks::{EmitAction, EmitResponse, Emitter, Payload};
 use config::HookConfig;
 
 #[derive(Debug, PartialEq)]
@@ -30,7 +30,6 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
     }
 
     fn emit(&self, method: EmitAction) -> EmitResponse {
-
         let hook_results = self.hooks()
             .unwrap_or(&vec![])
             .iter()
@@ -54,27 +53,26 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
                 })
             })
             .map(|(url, user, pass)| {
-                let status = match http_client() {
-                    Some(client) => {
-                        let req = match method {
-                            EmitAction::Delete => client.request(Method::Delete, url.as_str()),
-                            EmitAction::Update => client.post(url.as_str()),
-                        }.header(Authorization(Basic {
-                            username: user,
-                            password: pass,
-                        }))
-                            .json(&self.payload);
+                let client = reqwest::Client::new();
 
-                        req.send().ok().map_or_else(
-                            || false,
-                            |resp| match resp.status() {
-                                &StatusCode::Ok => true,
-                                _ => false,
-                            },
-                        )
-                    }
-                    None => false,
+                let mut req = match method {
+                    EmitAction::Delete => client.request(Method::Delete, url.as_str()),
+                    EmitAction::Update => client.post(url.as_str()),
                 };
+
+                req.header(Authorization(Basic {
+                    username: user,
+                    password: pass,
+                })).header(UserAgent::new("MM-API-NOTIFY"))
+                    .json(&self.payload);
+
+                let status = req.send().ok().map_or_else(
+                    || false,
+                    |resp| match resp.status() {
+                        StatusCode::Ok => true,
+                        _ => false,
+                    },
+                );
 
                 (url, status)
             })
@@ -112,10 +110,6 @@ impl<'a, 'b> Emitter<'a, 'b> for HttpEmitter<'a, 'b> {
     }
 }
 
-fn http_client() -> Option<reqwest::Client> {
-    reqwest::Client::new().ok()
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -125,7 +119,7 @@ mod tests {
 
     use std::collections::BTreeMap;
 
-    use hooks::{Emitter, EmitResponse, HttpEmitter, Payload};
+    use hooks::{EmitResponse, Emitter, HttpEmitter, Payload};
 
     #[test]
     fn emits_update() {
@@ -146,8 +140,7 @@ mod tests {
         let mut config = BTreeMap::new();
         config.insert("show".to_string(), vec![hook]);
 
-        if let Json::Object(payload_map) =
-            json!({
+        if let Json::Object(payload_map) = json!({
             "id": "test-child",
             "type": "show",
             "updated_at": "2017-01-01T00:00:00Z",
@@ -157,8 +150,7 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        })
-        {
+        }) {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -187,9 +179,7 @@ mod tests {
             }
         });
 
-        let req_data = json!({
-            "data": payload_data
-        });
+        let req_data = json!({ "data": payload_data });
 
         let _m = mock("POST", "/http_update_contains_object_test/")
             .with_status(200)
@@ -206,7 +196,9 @@ mod tests {
         config.insert("show".to_string(), vec![hook]);
 
         let payload_map = payload_data.as_object().unwrap();
-        let payload = Payload { data: payload_map.to_owned() };
+        let payload = Payload {
+            data: payload_map.to_owned(),
+        };
         let emit = HttpEmitter::new(&payload, &config);
 
         let emit_resp = EmitResponse {
@@ -233,8 +225,7 @@ mod tests {
         let mut config = BTreeMap::new();
         config.insert("show".to_string(), vec![hook]);
 
-        if let Json::Object(payload_map) =
-            json!({
+        if let Json::Object(payload_map) = json!({
             "id": "test-child",
             "type": "show",
             "updated_at": "2017-01-01T00:00:00Z",
@@ -244,8 +235,7 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        })
-        {
+        }) {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -294,8 +284,7 @@ mod tests {
         let mut config = BTreeMap::new();
         config.insert("show".to_string(), vec![hook1, hook2]);
 
-        if let Json::Object(payload_map) =
-            json!({
+        if let Json::Object(payload_map) = json!({
             "id": "test-child",
             "type": "show",
             "updated_at": "2017-01-01T00:00:00Z",
@@ -305,8 +294,7 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        })
-        {
+        }) {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -347,8 +335,7 @@ mod tests {
         config.insert("show".to_string(), vec![hook1]);
         config.insert("asset".to_string(), vec![hook2]);
 
-        if let Json::Object(payload_map) =
-            json!({
+        if let Json::Object(payload_map) = json!({
             "id": "test-child",
             "type": "show",
             "updated_at": "2017-01-01T00:00:00Z",
@@ -358,8 +345,7 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        })
-        {
+        }) {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -389,8 +375,7 @@ mod tests {
         let mut config = BTreeMap::new();
         config.insert("show".to_string(), vec![hook]);
 
-        if let Json::Object(payload_map) =
-            json!({
+        if let Json::Object(payload_map) = json!({
             "id": "test-child",
             "type": "show",
             "updated_at": "2017-01-01T00:00:00Z",
@@ -400,8 +385,7 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        })
-        {
+        }) {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -435,8 +419,7 @@ mod tests {
         let mut config = BTreeMap::new();
         config.insert("show".to_string(), vec![hook]);
 
-        if let Json::Object(payload_map) =
-            json!({
+        if let Json::Object(payload_map) = json!({
             "id": "test-child",
             "type": "show",
             "updated_at": "2017-01-01T00:00:00Z",
@@ -446,8 +429,7 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        })
-        {
+        }) {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -484,8 +466,7 @@ mod tests {
         let mut config = BTreeMap::new();
         config.insert("show".to_string(), vec![hook]);
 
-        if let Json::Object(payload_map) =
-            json!({
+        if let Json::Object(payload_map) = json!({
             "id": "test-child",
             "type": "show",
             "updated_at": "2017-01-01T00:00:00Z",
@@ -495,8 +476,7 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        })
-        {
+        }) {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
@@ -531,8 +511,7 @@ mod tests {
         let mut config = BTreeMap::new();
         config.insert("show".to_string(), vec![hook]);
 
-        if let Json::Object(payload_map) =
-            json!({
+        if let Json::Object(payload_map) = json!({
             "id": "test-child",
             "type": "show",
             "updated_at": "2017-01-01T00:00:00Z",
@@ -542,8 +521,7 @@ mod tests {
                 "updated_at": "2017-01-01T00:00:00Z",
                 "type": "franchise"
             }
-        })
-        {
+        }) {
             let payload = Payload { data: payload_map };
             let emit = HttpEmitter::new(&payload, &config);
 
