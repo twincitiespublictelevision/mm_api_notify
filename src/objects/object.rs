@@ -23,11 +23,9 @@ use types::{ImportResult, StorageEngine, ThreadedAPI};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Object {
-    #[serde(rename = "_id")]
-    pub id: String,
+    #[serde(rename = "_id")] pub id: String,
     pub attributes: Json,
-    #[serde(rename = "type")]
-    pub object_type: String,
+    #[serde(rename = "type")] pub object_type: String,
     pub self_url: String,
 }
 
@@ -207,6 +205,13 @@ impl Importable for Object {
                 }
             }
         } else {
+            info!(
+                "{:<10} {} {:<10} {}",
+                "Skipping",
+                self.id,
+                self.object_type,
+                self.attributes.get("title").unwrap().as_str().unwrap()
+            );
             (0, 0)
         };
 

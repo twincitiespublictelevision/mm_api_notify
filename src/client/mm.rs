@@ -16,11 +16,8 @@ impl APIClient for MMClient {
         config
             .ok_or(ClientError::ConfigError)
             .and_then(|conf| {
-                Client::new(conf.key.as_str(), conf.secret.as_str()).or(
-                    Err(
-                        ClientError::InitializationError,
-                    ),
-                )
+                Client::new(conf.key.as_str(), conf.secret.as_str())
+                    .or(Err(ClientError::InitializationError))
             })
             .and_then(|client| Ok(MMClient { client: client }))
     }

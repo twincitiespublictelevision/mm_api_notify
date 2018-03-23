@@ -35,9 +35,9 @@ impl APIClient for TestClient {
     fn url(&self, url: &str) -> ClientResult<String> {
         let mut reqs = self.reqs.lock().unwrap();
         reqs.push(url.to_string());
-        self.response.clone().ok_or(ClientError::API(
-            MMCError::ResourceNotFound,
-        ))
+        self.response
+            .clone()
+            .ok_or(ClientError::API(MMCError::ResourceNotFound))
     }
 
     fn show(&self, id: &str) -> ClientResult<String> {
