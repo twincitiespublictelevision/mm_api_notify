@@ -179,7 +179,7 @@ impl Importable for Object {
 
         // Check the updated_at date to determine if the db needs to
         // update this object
-        let mut update_result = if updated_at_time >= since {
+        let mut update_result = if runtime.config.ignore_skip || updated_at_time >= since {
             let res = runtime.store.put(self);
 
             if res.is_ok() && runtime.config.enable_hooks && runtime.config.hooks.is_some() {
@@ -321,6 +321,7 @@ mod tests {
             thread_pool_size: 0,
             min_runtime_delta: 0,
             lookback_timeframe: 0,
+            ignore_skip: false,
             log: LogConfig {
                 location: None,
                 level: None,
@@ -530,6 +531,46 @@ mod tests {
 
         let obj = Object::from_json(&obj_json).unwrap();
         let test_res = obj.import(&runtime, false, 0);
+
+        assert_eq!(test_res, (1, 0))
+    }
+
+    #[test]
+    fn emits_old_update_if_ignoring_skips() {
+        let e = "http://0.0.0.0/".to_string();
+
+        let mut hook = BTreeMap::new();
+        hook.insert("url".to_string(), e);
+
+        let mut config = BTreeMap::new();
+        config.insert(
+            "show".to_string(),
+            vec![hook.clone(), hook.clone(), hook.clone()],
+        );
+
+        let obj_json = json!({
+            "data": {
+                "id": "test-id",
+                "type": "show",
+                "attributes": {
+                    "updated_at": "2017-02-21T20:42:27.010750Z"
+                }
+            },
+            "links": {
+                "self": ""
+            }
+        });
+
+        let mut runtime = void_runtime();
+        runtime.config.ignore_skip = true;
+        runtime.config.enable_hooks = true;
+        runtime.config.hooks = Some(config);
+        runtime
+            .store
+            .set_response(Object::from_json(&obj_json).unwrap());
+
+        let obj = Object::from_json(&obj_json).unwrap();
+        let test_res = obj.import(&runtime, false, Utc::now().timestamp());
 
         assert_eq!(test_res, (1, 0))
     }

@@ -12,6 +12,7 @@ pub struct Config {
     pub thread_pool_size: usize,
     pub min_runtime_delta: i64,
     pub lookback_timeframe: i64,
+    pub ignore_skip: bool,
     pub log: LogConfig,
     pub enable_hooks: bool,
     pub hooks: Option<HookConfig>,

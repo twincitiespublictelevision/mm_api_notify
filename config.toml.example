@@ -2,6 +2,7 @@ thread_pool_size = 8
 min_runtime_delta = 30
 lookback_timeframe = 60
 enable_hooks = false
+ignore_skip = false
 
 [db]
 host = ""

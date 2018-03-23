@@ -34,6 +34,7 @@ A sample config file is supplied in `config.toml.example`
 | thread_pool_size   | Max number of threads to use                  |
 | min_runtime_delta  | Min seconds to wait between updates           |
 | lookback_timeframe | Number of seconds to look back during updates |
+| ignore_skip        | Enables writing to storage for every entry    |
 | enable_hooks       | Global control over hooks                     |
 
 ### Database [db]
