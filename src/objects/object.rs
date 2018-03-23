@@ -206,11 +206,13 @@ impl Importable for Object {
             }
         } else {
             info!(
-                "{:<10} {} {:<10} {}",
+                "{:<10} {} {:<10} {} due to {} < {}",
                 "Skipping",
                 self.id,
                 self.object_type,
-                self.attributes.get("title").unwrap().as_str().unwrap()
+                self.attributes.get("title").unwrap().as_str().unwrap(),
+                updated_at_time,
+                since
             );
             (0, 0)
         };
