@@ -2,14 +2,14 @@ version: 2
 jobs:
   test:
     docker:
-      - image: rust:buster
+      - image: rust:1.47-buster
     steps:
       - checkout
       - run: cargo test
 
   build:
     docker:
-      - image: rust:buster
+      - image: rust:1.47-buster
     steps:
       - checkout
       - run: cargo build --release

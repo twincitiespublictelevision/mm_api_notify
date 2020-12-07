@@ -1,14 +1,14 @@
 extern crate reqwest;
 extern crate serde_json;
 
-use serde_json::Value as Json;
-use self::reqwest::header::{Authorization, Basic, UserAgent};
+use self::reqwest::header::USER_AGENT;
 use self::reqwest::{Method, StatusCode};
+use serde_json::Value as Json;
 
 use std::collections::BTreeMap;
 
-use hooks::{EmitAction, EmitResponse, Emitter, Payload};
 use config::HookConfig;
+use hooks::{EmitAction, EmitResponse, Emitter, Payload};
 
 #[derive(Debug, PartialEq)]
 pub struct HttpEmitter<'a, 'b> {
@@ -30,12 +30,14 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
     }
 
     fn emit(&self, method: EmitAction) -> EmitResponse {
-        let hook_results = self.hooks()
+        let hook_results = self
+            .hooks()
             .unwrap_or(&vec![])
             .iter()
             .filter_map(|hook| {
                 hook.get("url").map(|base_url| {
-                    let user = hook.get("username")
+                    let user = hook
+                        .get("username")
                         .map(|user_ref| user_ref.to_owned())
                         .unwrap_or("".to_string());
                     let pass = hook.get("password").map(|pass_ref| pass_ref.to_owned());
@@ -53,23 +55,22 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
                 })
             })
             .map(|(url, user, pass)| {
-                let client = reqwest::Client::new();
+                let client = reqwest::blocking::Client::new();
 
                 let mut req = match method {
-                    EmitAction::Delete => client.request(Method::Delete, url.as_str()),
+                    EmitAction::Delete => client.request(Method::DELETE, url.as_str()),
                     EmitAction::Update => client.post(url.as_str()),
                 };
 
-                req.header(Authorization(Basic {
-                    username: user,
-                    password: pass,
-                })).header(UserAgent::new("MM-API-NOTIFY"))
+                req = req
+                    .basic_auth(user, pass)
+                    .header(USER_AGENT, "MM-API-NOTIFY")
                     .json(&self.payload);
 
                 let status = req.send().ok().map_or_else(
                     || false,
                     |resp| match resp.status() {
-                        StatusCode::Ok => true,
+                        StatusCode::OK => true,
                         _ => false,
                     },
                 );
