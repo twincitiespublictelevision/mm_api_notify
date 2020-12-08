@@ -19,10 +19,6 @@
 5. Create a config file based on `config.toml.example` file (see below)
 6. Start the service with `rebuild` to build the cache for the first time.
 
-## Docker Image
-
-Alternatively a [CentOS](https://www.centos.org/) based [Docker](https://www.docker.com/) image is [available for use](https://hub.docker.com/r/tptwebmaster/mm_api_notify/).
-
 ## Configuration
 
 A sample config file is supplied in `config.toml.example`
