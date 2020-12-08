@@ -3,6 +3,9 @@ jobs:
   test:
     docker:
       - image: rust:1.47-buster
+        auth:
+          username: $DOCKERHUB_ACCOUNT 
+          password: $DOCKERHUB_PASSWORD
     steps:
       - checkout
       - run: cargo test
@@ -10,6 +13,9 @@ jobs:
   build:
     docker:
       - image: rust:1.47-buster
+        auth:
+          username: $DOCKERHUB_ACCOUNT 
+          password: $DOCKERHUB_PASSWORD
     steps:
       - checkout
       - run: cargo build --release
@@ -23,6 +29,9 @@ jobs:
   build_container:
     docker:
       - image: docker:latest
+        auth:
+          username: $DOCKERHUB_ACCOUNT 
+          password: $DOCKERHUB_PASSWORD
     steps:
       - run: echo $CIRCLE_SHA1 > .circle-sha
       - restore_cache:
