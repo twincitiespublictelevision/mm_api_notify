@@ -56,41 +56,42 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
                 })
             })
             .map(|(url, user, pass)| {
-                let client = reqwest::blocking::Client::new();
-
-                let mut req = match method {
-                    EmitAction::Delete => client.request(Method::DELETE, url.as_str()),
-                    EmitAction::Update => client.post(url.as_str()),
-                };
-
-                req = req
-                    .basic_auth(user, pass)
-                    .header(USER_AGENT, "MM-API-NOTIFY")
-                    .json(&self.payload);
-
-                let response = req.send();
-
-                if let Err(send_err) = &response {
-                    warn!("Failed sending to remote hook: {}", send_err);
-                }
-
-                let status = response.ok().map_or_else(
-                    || false,
-                    |resp| match resp.status() {
-                        StatusCode::OK => true,
-                        failure => {
-                            warn!(
-                                "Remote hook returned status: {} with message: {}",
-                                resp.status(),
-                                resp.text()
-                                    .unwrap_or("Unable to read message from remote".to_string())
-                            );
-                            false
+                reqwest::blocking::ClientBuilder::new()
+                    .danger_accept_invalid_hostnames(true)
+                    .build()
+                    .map(|client| {
+                        let mut req = match method {
+                            EmitAction::Delete => client.request(Method::DELETE, url.as_str()),
+                            EmitAction::Update => client.post(url.as_str()),
+                        };
+                        req = req
+                            .basic_auth(user, pass)
+                            .header(USER_AGENT, "MM-API-NOTIFY")
+                            .json(&self.payload);
+                        let response = req.send();
+                        if let Err(send_err) = &response {
+                            warn!("Failed sending to remote hook: {}", send_err);
                         }
-                    },
-                );
+                        let status = response.ok().map_or_else(
+                            || false,
+                            |resp| match resp.status() {
+                                StatusCode::OK => true,
+                                failure => {
+                                    warn!(
+                                        "Remote hook returned status: {} with message: {}",
+                                        resp.status(),
+                                        resp.text().unwrap_or(
+                                            "Unable to read message from remote".to_string()
+                                        )
+                                    );
+                                    false
+                                }
+                            },
+                        );
 
-                (url, status)
+                        (url.clone(), status)
+                    })
+                    .unwrap_or((url, false))
             })
             .fold((vec![], vec![]), |(mut pass, mut fail), (hook, status)| {
                 if status == true {
