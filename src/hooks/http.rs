@@ -3,6 +3,7 @@ extern crate serde_json;
 
 use self::reqwest::header::USER_AGENT;
 use self::reqwest::{Method, StatusCode};
+use log::warn;
 use serde_json::Value as Json;
 
 use std::collections::BTreeMap;
@@ -67,11 +68,25 @@ impl<'a, 'b> HttpEmitter<'a, 'b> {
                     .header(USER_AGENT, "MM-API-NOTIFY")
                     .json(&self.payload);
 
-                let status = req.send().ok().map_or_else(
+                let response = req.send();
+
+                if let Err(send_err) = &response {
+                    warn!("Failed sending to remote hook: {}", send_err);
+                }
+
+                let status = response.ok().map_or_else(
                     || false,
                     |resp| match resp.status() {
                         StatusCode::OK => true,
-                        _ => false,
+                        failure => {
+                            warn!(
+                                "Remote hook returned status: {} with message: {}",
+                                resp.status(),
+                                resp.text()
+                                    .unwrap_or("Unable to read message from remote".to_string())
+                            );
+                            false
+                        }
                     },
                 );
 
