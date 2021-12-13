@@ -2,7 +2,7 @@ version: 2
 jobs:
   test:
     docker:
-      - image: rust:1.57-buster
+      - image: rust:1.47-buster
         auth:
           username: $DOCKERHUB_ACCOUNT 
           password: $DOCKERHUB_PASSWORD
@@ -12,7 +12,7 @@ jobs:
 
   build:
     docker:
-      - image: rust:1.57-buster
+      - image: rust:1.47-buster
         auth:
           username: $DOCKERHUB_ACCOUNT 
           password: $DOCKERHUB_PASSWORD
