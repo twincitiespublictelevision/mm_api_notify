@@ -63,6 +63,23 @@ impl APIClient for MMClient {
             .map_err(ClientError::API)
     }
 
+    fn franchise(&self, id: &str) -> ClientResult<String> {
+        self.client
+            .franchise(id, Some(vec![("platform-slug", "partnerplayer")]))
+            .or_else(|err| {
+                match err {
+                    MMCError::ResourceNotFound => {}
+                    MMCError::NotAuthorized => {}
+                    _ => {
+                        error!("Failed to query franchise {} due to {}", id, err);
+                    }
+                };
+
+                Err(err)
+            })
+            .map_err(ClientError::API)
+    }
+
     fn all_shows(&self) -> ClientResult<String> {
         self.client
             .shows(vec![

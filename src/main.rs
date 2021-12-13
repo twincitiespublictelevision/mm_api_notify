@@ -29,9 +29,9 @@ mod storage;
 mod types;
 
 use app_dirs::{get_app_dir, AppDataType, AppInfo};
-use clap::{App, Arg};
-use chrono::{Duration, NaiveDateTime};
 use chrono::offset::Utc;
+use chrono::{Duration, NaiveDateTime};
+use clap::{App, Arg};
 use serde_json::error::Result as JsonResult;
 use serde_json::Value as Json;
 
@@ -127,7 +127,8 @@ fn main() {
         path.to_str().map(|str| str.to_string())
     } else {
         matches.value_of("config").map(|str| str.to_string())
-    }.expect("Failed to run. Unable to parse path to default config location.");
+    }
+    .expect("Failed to run. Unable to parse path to default config location.");
 
     let conf_res = parse_config(config_path.as_str())
         .ok_or(IngestError::InvalidConfig)
@@ -199,6 +200,8 @@ fn main() {
                         let build_res = if matches.is_present("build") {
                             if let Some(show) = matches.value_of("show") {
                                 run_show(&runtime, time_arg, show).ok()
+                            } else if let Some(franchise) = matches.value_of("franchise") {
+                                run_franchise(&runtime, time_arg, franchise).ok()
                             } else {
                                 run_build(&runtime, time_arg).ok()
                             }
@@ -266,6 +269,23 @@ fn run_show<T: StorageEngine, S: ThreadedAPI>(
     );
 
     let result = import_object(runtime.api.show(id), runtime, run_start_time);
+    print_runtime("Create", &result);
+
+    result
+}
+
+fn run_franchise<T: StorageEngine, S: ThreadedAPI>(
+    runtime: &Runtime<T, S>,
+    run_start_time: i64,
+    id: &str,
+) -> IngestResult<RunResult> {
+    info!(
+        "Starting franchise build run from {} : {}",
+        run_start_time,
+        NaiveDateTime::from_timestamp(run_start_time, 0)
+    );
+
+    let result = import_object(runtime.api.franchise(id), runtime, run_start_time);
     print_runtime("Create", &result);
 
     result

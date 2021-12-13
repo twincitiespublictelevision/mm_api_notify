@@ -45,6 +45,11 @@ impl APIClient for TestClient {
         self.url(url.as_str())
     }
 
+    fn franchise(&self, id: &str) -> ClientResult<String> {
+        let url = "franchise/".to_string() + id;
+        self.url(url.as_str())
+    }
+
     fn all_shows(&self) -> ClientResult<String> {
         self.url("all_shows")
     }
