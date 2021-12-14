@@ -76,6 +76,13 @@ fn main() {
                 .help("Limits the full build to a single show"),
         )
         .arg(
+            Arg::with_name("franchise")
+                .long("franchise")
+                .takes_value(true)
+                .requires("build")
+                .help("Limits the full build to a single franchise"),
+        )
+        .arg(
             Arg::with_name("skip-update")
                 .short("k")
                 .long("skip-update")
